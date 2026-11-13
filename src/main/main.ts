@@ -1,19 +1,29 @@
-import { app, BrowserWindow, ipcMain, dialog, nativeTheme, Menu } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, nativeTheme, Menu, MenuItemConstructorOptions } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { DurableStore } from './store';
 import { WindowStateManager } from './windowState';
 import { ImportOptions } from '../shared/types';
 
+// App branding: Setlist
+app.setName('Setlist');
+
+// Explicitly preserve the established user-data location under ~/Library/Application Support/Studio Songs
+const legacyUserData = path.join(app.getPath('appData'), 'Studio Songs');
+const altLegacyUserData = path.join(app.getPath('appData'), 'studio-songs');
+
+let targetUserDataDir = legacyUserData;
+if (!fs.existsSync(legacyUserData) && fs.existsSync(altLegacyUserData)) {
+  targetUserDataDir = altLegacyUserData;
+}
+app.setPath('userData', targetUserDataDir);
+
 let mainWindow: BrowserWindow | null = null;
 let store: DurableStore;
 let windowManager: WindowStateManager;
-let isQuitting = false;
 let forceQuit = false;
 
-app.setName('Studio Songs');
-
-// Prevent multiple instances
+// Prevent multiple instances: repeated launch focuses the existing instance
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   app.quit();
@@ -26,12 +36,14 @@ if (!gotTheLock) {
   });
 }
 
-async function createWindow() {
-  let userDataDir = app.getPath('userData');
-  const legacyDir = path.join(app.getPath('appData'), 'studio-songs');
-  if (!fs.existsSync(userDataDir) && fs.existsSync(legacyDir)) {
-    userDataDir = legacyDir;
+function sendRendererAction(action: string, payload?: any) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('menu:action', action, payload);
   }
+}
+
+async function createWindow() {
+  const userDataDir = app.getPath('userData');
   store = new DurableStore(userDataDir);
   await store.initialize();
 
@@ -45,8 +57,8 @@ async function createWindow() {
     height: bounds.height,
     minWidth: 780,
     minHeight: 500,
-    title: 'Studio Songs',
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#1e1e1e' : '#f5f5f7',
+    title: 'Setlist',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#18181b' : '#f6f6f8',
     show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -56,7 +68,6 @@ async function createWindow() {
     },
   });
 
-  // Track window bounds and clamp on display changes
   windowManager.registerDisplayListeners(mainWindow);
 
   mainWindow.on('resize', () => {
@@ -67,7 +78,7 @@ async function createWindow() {
     if (mainWindow) windowManager.saveState(mainWindow);
   });
 
-  // Disable remote navigation
+  // Security: deny external navigation and window creation
   mainWindow.webContents.on('will-navigate', (e, url) => {
     if (!url.startsWith('file://') && !url.includes('localhost')) {
       e.preventDefault();
@@ -76,16 +87,13 @@ async function createWindow() {
 
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 
-  // Handle window close confirmation & save flush
+  // Safe window close
   mainWindow.on('close', async (e) => {
     if (forceQuit) return;
-
     e.preventDefault();
-    // Ask renderer if there are unsaved forms or pending note edits
     mainWindow?.webContents.send('app:request-close');
   });
 
-  // Load app: offline file
   const isDev = process.env.NODE_ENV === 'development' && !app.isPackaged;
   if (isDev && process.env.VITE_DEV_SERVER_URL) {
     await mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
@@ -100,12 +108,11 @@ async function createWindow() {
 
   mainWindow.on('closed', () => {
     mainWindow = null;
-    // Closing the main window quits the app completely
     app.quit();
   });
 }
 
-// Native theme tracking
+// Track OS theme updates
 nativeTheme.on('updated', () => {
   if (mainWindow && !mainWindow.isDestroyed()) {
     const theme = nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
@@ -113,7 +120,7 @@ nativeTheme.on('updated', () => {
   }
 });
 
-// Periodic purge of expired songs (every 60 mins)
+// Periodic purge (every 60 mins)
 const PURGE_INTERVAL = 60 * 60 * 1000;
 setInterval(() => {
   if (store) {
@@ -123,88 +130,32 @@ setInterval(() => {
   }
 }, PURGE_INTERVAL);
 
-// Register IPC handlers
-ipcMain.handle('store:getState', async () => {
-  return store.getState();
-});
+// --- IPC Handlers ---
+ipcMain.handle('store:getState', async () => store.getState());
+ipcMain.handle('store:createSong', async (_, input) => store.createSong(input));
+ipcMain.handle('store:updateSongMetadata', async (_, songId, input) => store.updateSongMetadata(songId, input));
+ipcMain.handle('store:updateSongNotes', async (_, songId, notes, clientUpdatedAt) => store.updateSongNotes(songId, notes, clientUpdatedAt));
+ipcMain.handle('store:duplicateSong', async (_, songId) => store.duplicateSong(songId));
+ipcMain.handle('store:deleteSong', async (_, songId) => store.deleteSong(songId));
+ipcMain.handle('store:restoreSong', async (_, songId) => store.restoreSong(songId));
 
-ipcMain.handle('store:createSong', async (_, input) => {
-  return store.createSong(input);
-});
+// Current Setlist IPC
+ipcMain.handle('store:addSongToCurrentSetlist', async (_, songId) => store.addSongToCurrentSetlist(songId));
+ipcMain.handle('store:addMultipleSongsToCurrentSetlist', async (_, songIds) => store.addMultipleSongsToCurrentSetlist(songIds));
+ipcMain.handle('store:reorderCurrentSetlist', async (_, orderedEntryIds) => store.reorderCurrentSetlist(orderedEntryIds));
+ipcMain.handle('store:removeCurrentSetlistEntry', async (_, entryId) => store.removeCurrentSetlistEntry(entryId));
+ipcMain.handle('store:restoreCurrentSetlistEntry', async (_, entry, targetPosition) => store.restoreCurrentSetlistEntry(entry, targetPosition));
+ipcMain.handle('store:clearCurrentSetlist', async () => store.clearCurrentSetlist());
+ipcMain.handle('store:restoreClearedSetlist', async (_, entries) => store.restoreClearedSetlist(entries));
+ipcMain.handle('store:chooseMigrationSetlist', async (_, legacySetlistId) => store.chooseMigrationSetlist(legacySetlistId));
 
-ipcMain.handle('store:updateSongMetadata', async (_, songId, input) => {
-  return store.updateSongMetadata(songId, input);
-});
+ipcMain.handle('store:updatePreferences', async (_, prefs) => store.updatePreferences(prefs));
+ipcMain.handle('store:touchRecentSong', async (_, songId) => store.touchRecentSong(songId));
+ipcMain.handle('store:flush', async () => store.flush());
 
-ipcMain.handle('store:updateSongNotes', async (_, songId, notes, clientUpdatedAt) => {
-  return store.updateSongNotes(songId, notes, clientUpdatedAt);
-});
+ipcMain.handle('theme:getSystem', () => (nativeTheme.shouldUseDarkColors ? 'dark' : 'light'));
 
-ipcMain.handle('store:duplicateSong', async (_, songId) => {
-  return store.duplicateSong(songId);
-});
-
-ipcMain.handle('store:deleteSong', async (_, songId) => {
-  return store.deleteSong(songId);
-});
-
-ipcMain.handle('store:restoreSong', async (_, songId) => {
-  return store.restoreSong(songId);
-});
-
-ipcMain.handle('store:createSetlist', async (_, input) => {
-  return store.createSetlist(input);
-});
-
-ipcMain.handle('store:updateSetlist', async (_, setlistId, input) => {
-  return store.updateSetlist(setlistId, input);
-});
-
-ipcMain.handle('store:setSetlistArchived', async (_, setlistId, archived) => {
-  return store.setSetlistArchived(setlistId, archived);
-});
-
-ipcMain.handle('store:addSongToSetlist', async (_, setlistId, songId) => {
-  return store.addSongToSetlist(setlistId, songId);
-});
-
-ipcMain.handle('store:addMultipleSongsToSetlist', async (_, setlistId, songIds) => {
-  return store.addMultipleSongsToSetlist(setlistId, songIds);
-});
-
-ipcMain.handle('store:reorderSetlistEntries', async (_, setlistId, orderedEntryIds) => {
-  return store.reorderSetlistEntries(setlistId, orderedEntryIds);
-});
-
-ipcMain.handle('store:removeSetlistEntry', async (_, entryId) => {
-  return store.removeSetlistEntry(entryId);
-});
-
-ipcMain.handle('store:restoreSetlistEntry', async (_, entry, targetPosition) => {
-  return store.restoreSetlistEntry(entry, targetPosition);
-});
-
-ipcMain.handle('store:updatePreferences', async (_, prefs) => {
-  return store.updatePreferences(prefs);
-});
-
-ipcMain.handle('store:touchRecentSong', async (_, songId) => {
-  store.touchRecentSong(songId);
-});
-
-ipcMain.handle('store:touchRecentSetlist', async (_, setlistId) => {
-  store.touchRecentSetlist(setlistId);
-});
-
-ipcMain.handle('store:flush', async () => {
-  await store.flush();
-});
-
-ipcMain.handle('theme:getSystem', () => {
-  return nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
-});
-
-// App close response from renderer
+// Window close confirmation response
 ipcMain.on('app:respond-close', async (_, canClose: boolean) => {
   if (canClose) {
     try {
@@ -217,7 +168,7 @@ ipcMain.on('app:respond-close', async (_, canClose: boolean) => {
     } catch (err: any) {
       dialog.showErrorBox(
         'Save Error',
-        `Failed to save changes before closing: ${err.message}. Your changes are retained. Please retry closing or save your changes.`
+        `Failed to save changes before closing: ${err.message}. Your changes are retained.`
       );
     }
   }
@@ -227,9 +178,9 @@ ipcMain.on('app:respond-close', async (_, canClose: boolean) => {
 ipcMain.handle('dialog:exportBackup', async () => {
   if (!mainWindow) return { cancelled: true };
 
-  const defaultFileName = `studio-songs-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  const defaultFileName = `setlist-backup-${new Date().toISOString().slice(0, 10)}.json`;
   const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
-    title: 'Export Studio Songs Backup',
+    title: 'Export Setlist Backup',
     defaultPath: defaultFileName,
     filters: [{ name: 'JSON Backup (*.json)', extensions: ['json'] }],
   });
@@ -252,7 +203,7 @@ ipcMain.handle('dialog:importBackup', async (_, options: ImportOptions) => {
   if (!mainWindow) return { cancelled: true };
 
   const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
-    title: 'Import Studio Songs Backup',
+    title: 'Import Setlist Backup',
     properties: ['openFile'],
     filters: [{ name: 'JSON Backup (*.json)', extensions: ['json'] }],
   });
@@ -271,58 +222,195 @@ ipcMain.handle('dialog:importBackup', async (_, options: ImportOptions) => {
   }
 });
 
-// Setup native application menu
+// Complete Native Application Menu Bar
 function createApplicationMenu() {
   const isMac = process.platform === 'darwin';
-  const template: any[] = [
+
+  const template: MenuItemConstructorOptions[] = [
     ...(isMac
       ? [
           {
-            label: app.name,
+            label: 'Setlist',
             submenu: [
-              { role: 'about' },
-              { type: 'separator' },
-              { role: 'services' },
-              { type: 'separator' },
-              { role: 'hide' },
-              { role: 'hideOthers' },
-              { role: 'unhide' },
-              { type: 'separator' },
-              { role: 'quit' },
+              {
+                label: 'About Setlist',
+                role: 'about' as const,
+              },
+              { type: 'separator' as const },
+              {
+                label: 'Settings…',
+                accelerator: 'CmdOrCtrl+,',
+                click: () => sendRendererAction('open-settings'),
+              },
+              { type: 'separator' as const },
+              { role: 'services' as const },
+              { type: 'separator' as const },
+              { role: 'hide' as const, label: 'Hide Setlist' },
+              { role: 'hideOthers' as const },
+              { role: 'unhide' as const, label: 'Show All' },
+              { type: 'separator' as const },
+              {
+                label: 'Quit Setlist',
+                accelerator: 'CmdOrCtrl+Q',
+                click: () => {
+                  if (mainWindow && !mainWindow.isDestroyed()) {
+                    mainWindow.close();
+                  } else {
+                    app.quit();
+                  }
+                },
+              },
             ],
           },
         ]
       : []),
     {
+      label: 'File',
+      submenu: [
+        {
+          label: 'New Song',
+          accelerator: 'CmdOrCtrl+N',
+          click: () => sendRendererAction('new-song'),
+        },
+        {
+          label: 'Save',
+          accelerator: 'CmdOrCtrl+S',
+          click: () => sendRendererAction('save'),
+        },
+        { type: 'separator' as const },
+        {
+          label: 'Import Backup…',
+          click: () => sendRendererAction('trigger-import'),
+        },
+        {
+          label: 'Export Backup…',
+          click: () => sendRendererAction('trigger-export'),
+        },
+        { type: 'separator' as const },
+        {
+          label: 'Close Window',
+          accelerator: 'CmdOrCtrl+W',
+          click: () => sendRendererAction('close-window-or-modal'),
+        },
+      ],
+    },
+    {
       label: 'Edit',
       submenu: [
-        { role: 'undo' },
-        { role: 'redo' },
-        { type: 'separator' },
-        { role: 'cut' },
-        { role: 'copy' },
-        { role: 'paste' },
-        { role: 'selectAll' },
+        { role: 'undo' as const },
+        { role: 'redo' as const },
+        { type: 'separator' as const },
+        { role: 'cut' as const },
+        { role: 'copy' as const },
+        { role: 'paste' as const },
+        { role: 'pasteAndMatchStyle' as const },
+        { role: 'selectAll' as const },
+        { type: 'separator' as const },
+        {
+          label: 'Find Song',
+          accelerator: 'CmdOrCtrl+F',
+          click: () => sendRendererAction('find-song'),
+        },
       ],
     },
     {
       label: 'View',
       submenu: [
-        { role: 'resetZoom' },
-        { role: 'zoomIn' },
-        { role: 'zoomOut' },
-        { type: 'separator' },
-        { role: 'togglefullscreen' },
+        {
+          label: 'Home',
+          accelerator: 'CmdOrCtrl+1',
+          click: () => sendRendererAction('nav-home'),
+        },
+        {
+          label: 'Library',
+          accelerator: 'CmdOrCtrl+2',
+          click: () => sendRendererAction('nav-library'),
+        },
+        {
+          label: 'Setlist',
+          accelerator: 'CmdOrCtrl+3',
+          click: () => sendRendererAction('nav-setlist'),
+        },
+        { type: 'separator' as const },
+        {
+          label: 'Text Size',
+          submenu: [
+            {
+              label: 'Small',
+              click: () => sendRendererAction('set-text-size', 'small'),
+            },
+            {
+              label: 'Standard',
+              click: () => sendRendererAction('set-text-size', 'standard'),
+            },
+            {
+              label: 'Large',
+              click: () => sendRendererAction('set-text-size', 'large'),
+            },
+            {
+              label: 'Extra Large',
+              click: () => sendRendererAction('set-text-size', 'x-large'),
+            },
+          ],
+        },
+        { type: 'separator' as const },
+        { role: 'togglefullscreen' as const },
+      ],
+    },
+    {
+      label: 'Song',
+      submenu: [
+        {
+          label: 'Add Selected Song to Setlist',
+          click: () => sendRendererAction('add-selected-to-setlist'),
+        },
+        { type: 'separator' as const },
+        {
+          label: 'Previous Song',
+          accelerator: 'CmdOrCtrl+Alt+Left',
+          click: () => sendRendererAction('prev-song'),
+        },
+        {
+          label: 'Next Song',
+          accelerator: 'CmdOrCtrl+Alt+Right',
+          click: () => sendRendererAction('next-song'),
+        },
+        { type: 'separator' as const },
+        {
+          label: 'Clear Setlist…',
+          click: () => sendRendererAction('clear-setlist'),
+        },
       ],
     },
     {
       label: 'Window',
       submenu: [
-        { role: 'minimize' },
-        { role: 'zoom' },
+        { role: 'minimize' as const },
+        { role: 'zoom' as const },
         ...(isMac
-          ? [{ type: 'separator' }, { role: 'front' }, { type: 'separator' }, { role: 'window' }]
-          : [{ role: 'close' }]),
+          ? [
+              { type: 'separator' as const },
+              { role: 'front' as const },
+            ]
+          : [{ role: 'close' as const }]),
+      ],
+    },
+    {
+      label: 'Help',
+      submenu: [
+        {
+          label: 'Setlist Help',
+          click: () => sendRendererAction('open-help'),
+        },
+        {
+          label: 'Keyboard Shortcuts',
+          click: () => sendRendererAction('open-shortcuts'),
+        },
+        { type: 'separator' as const },
+        {
+          label: 'Replay Guided Tour',
+          click: () => sendRendererAction('replay-tour'),
+        },
       ],
     },
   ];
@@ -332,6 +420,15 @@ function createApplicationMenu() {
 }
 
 app.whenReady().then(async () => {
+  // Set native macOS About Panel configuration
+  app.setAboutPanelOptions({
+    applicationName: 'Setlist',
+    applicationVersion: '1.1.0',
+    version: '1.1.0',
+    copyright: '© 2026 William Hay',
+    credits: '© 2026 William Hay',
+  });
+
   createApplicationMenu();
   await createWindow();
 
@@ -343,6 +440,5 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
-  // Closing the main window quits the app completely
   app.quit();
 });

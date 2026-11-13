@@ -1,21 +1,22 @@
-# Studio Songs
+# Setlist (v1.1)
 
-**Studio Songs** is a lightweight, reliable, 100% offline macOS desktop application designed as a fast musical reference tool for studio and church production environments alongside DAWs such as Fender Studio Pro.
+**Setlist** is a lightweight, reliable, 100% offline macOS desktop application designed as a fast musical reference and service running-order tool for studio and church production environments alongside DAWs such as Fender Studio Pro.
 
 ---
 
 ## 1. Architecture & Design Decisions
 
 ### Technology Stack
-- **Desktop Runtime:** Electron 33 (macOS arm64 standalone app bundle)
+- **Desktop Runtime:** Electron 33 (macOS arm64 standalone app bundle `Setlist.app`)
 - **UI Architecture:** React 18 + TypeScript + Vite
 - **Styling:** Native macOS San Francisco typography, responsive dual-theme (Light & Dark appearance matching system preferences dynamically), and accessible text-size scaling.
-- **Storage Architecture:** Durable local JSON store with POSIX atomic write-swap (`.tmp` write + `fsyncSync` + atomic `fs.renameSync`) and an automatic append-only transaction rollback snapshot (`studio_songs_data.backup.json`).
+- **Storage Architecture:** Durable local JSON store with POSIX atomic write-swap (`.tmp` write + `fsyncSync` + atomic `fs.renameSync`), versioned schema migration (v1 → v2), automatic pre-migration snapshotting (`studio_songs_data.pre-v1.1.json`), and rollback snapshots.
 - **Offline & Security Guarantee:** Zero CDN assets, zero remote analytics, zero update checks, disabled remote navigation (`will-navigate` denied), isolated context bridge (`contextIsolation: true`, `nodeIntegration: false`), and strict offline Content Security Policy.
 
-### Storage Locations
+### Storage Locations & Data Preservation
 All app data is persisted outside the app bundle and development directory:
-- **Primary Data Store:** `~/Library/Application Support/Studio Songs/studio_songs_data.json`
+- **Primary Data Store:** `~/Library/Application Support/Studio Songs/studio_songs_data.json` *(preserved under the established path so updates never lose user data)*
+- **Pre-v1.1 Migration Snapshot:** `~/Library/Application Support/Studio Songs/studio_songs_data.pre-v1.1.json`
 - **Rollback Snapshot:** `~/Library/Application Support/Studio Songs/studio_songs_data.backup.json`
 - **Window Geometry & Clamping:** `~/Library/Application Support/Studio Songs/window-state.json`
 
@@ -24,18 +25,18 @@ All app data is persisted outside the app bundle and development directory:
 ## 2. Quick Installation & Launch
 
 ### Run Directly or Install to Applications
-The application has been fully compiled and packaged. To install it to your user Applications directory or launch immediately:
+The application has been fully compiled and packaged into a standalone macOS arm64 application:
 
 ```bash
 # Option A: Launch directly from the build output
-open "/Users/wihay/Dev/studio-songs/release/mac-arm64/Studio Songs.app"
+open "/Users/wihay/Dev/studio-songs/release/mac-arm64/Setlist.app"
 
 # Option B: Copy to /Applications (or ~/Applications)
-cp -R "/Users/wihay/Dev/studio-songs/release/mac-arm64/Studio Songs.app" /Applications/
-open "/Applications/Studio Songs.app"
+cp -R "/Users/wihay/Dev/studio-songs/release/mac-arm64/Setlist.app" /Applications/
+open "/Applications/Setlist.app"
 ```
 
-Once copied to `/Applications`, Studio Songs appears in Spotlight, Launchpad, and can be pinned to your macOS Dock.
+Once copied to `/Applications`, Setlist appears in Spotlight, Launchpad, and can be pinned to your macOS Dock.
 
 ---
 
@@ -44,7 +45,7 @@ Once copied to `/Applications`, Studio Songs appears in Spotlight, Launchpad, an
 ```bash
 cd /Users/wihay/Dev/studio-songs
 
-# Run unit tests
+# Run unit tests (25 automated unit tests across 4 test suites)
 npm test
 
 # Build production web assets & Electron TypeScript
@@ -56,13 +57,14 @@ npm run package
 
 ---
 
-## 4. Key Capabilities & Polish
+## 4. Key Capabilities & What's New in v1.1
 
-1. **Global Search (`⌘F`):** Searches active song titles and artists instantaneously across the entire library. Shows ordinary exact/substring matches first; falls back to reasonable fuzzy matching for small typos (visibly labeled as "Close match").
-2. **Prominent Musical Readouts:** Key, BPM (free-form text, e.g. `72 verse, 76 chorus`), and Time Signature cards remain fixed in view while notes scroll.
-3. **Autosaved Notes:** Direct edit notes textarea with debounce, active save indicator (`Saving…` / `Saved`), and native `⌘Z` undo support.
-4. **Ordered Setlists:** Drag-and-drop song ordering with keyboard alternatives (`Move Up` / `Move Down`), duplicate song occurrences with distinct entry identities, and non-looping `Prev` / `Next` step buttons (`⌘⌥←` and `⌘⌥→`).
-5. **Search Detour Context:** When searching from a setlist, opening a library song maintains a persistent "Back to Setlist" banner that returns you to your exact setlist place.
-6. **Recently Deleted & 30-Day Expiry:** Songs deleted from the library are transactionally removed from all active and archived setlists and retained in Recently Deleted for 30 days. Restoring returns them in their original creation order.
-7. **Merge Backup Import:** Export plain-text JSON backups anytime. Importing uses an all-or-nothing merge validation where existing local records win, dead setlist references are skipped, and purged song resurrections are blocked.
-8. **Window Recovery:** Remembers window geometry and split pane width; automatically detects disconnected external displays and clamps the window safely back onto active displays.
+1. **Brand & Credit:** Renamed to **Setlist** across Finder/Dock, window title, and native menu bar. Native About dialog displays the exact credit `© 2026 William Hay` and version 1.1.0 (Build 2026.11).
+2. **Fixed Song Header Layout:** Title and artist now have their own full-width block that wraps gracefully at word boundaries (`word-break: normal; overflow-wrap: break-word;`). Action buttons (`+ Add to Setlist`, `Edit Details`, and a `More ▾` menu with `Duplicate` and `Delete`) sit on a dedicated row beneath. In narrow windows (~780px) and at maximum text size, text never squishes into a 1-character-wide column.
+3. **Single Current Setlist:** Replaced complex multi-setlist management with one clear, persistent service running order (`currentSetlist`). Includes drag-and-drop and accessible keyboard reordering, duplicate song occurrences, and step navigation (`⌘⌥←` / `⌘⌥→`).
+4. **Clear Setlist with Safe Undo:** A dedicated **Clear Setlist** button confirms with *"Clear the current setlist? Your songs will stay in the library."* and provides a 6-second **Undo** notification toast to restore the exact running order.
+5. **Clean Song Form & Practical Defaults:** Removed sample placeholders ("e.g. Living Hope"). New songs default to BPM `74`, Time Signature `4/4`, and Key `Unset`. Smart title-casing formats all-lowercase input (e.g. `gratitude` → `Gratitude`, `brandon lake` → `Brandon Lake`) while preserving deliberate mixed casing (`King of My Heart`, `CCLI`).
+6. **Non-Disruptive Search Popover (`⌘F`):** Global search on Home or Setlist opens an anchored popover under the search box with keyboard navigation and instant `+ Add to Setlist` action without leaving your view. Searching on Library filters the visible list in-place.
+7. **Anchored Guided Tour:** The first-run walkthrough anchors tooltips directly beside real UI elements using `getBoundingClientRect()`, with Skip, Next, Back, and Finish controls. It can be re-run anytime from Settings.
+8. **Streamlined Settings:** Single modal organized into 3 clear tabs: *Appearance* (Theme, Text size), *Library & Backups* (Export JSON, Import & Merge JSON, View Deleted), and *Help & About* (About Setlist, Restart Tour, Keyboard Shortcuts).
+9. **Native macOS Menus:** Full macOS menu bar featuring `Setlist`, `File`, `Edit`, `View`, `Song`, `Window`, and `Help` menus with standard shortcuts (`⌘N`, `⌘F`, `⌘,`, `⌘W`, `⌘Q`, `⌘⌥←/→`).

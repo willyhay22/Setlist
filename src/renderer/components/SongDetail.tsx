@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Song, Setlist } from '../../shared/types';
+import { Song } from '../../shared/types';
 import { useStore } from '../hooks/useStore';
 import { formatKeyDisplay } from '../../shared/keys';
 import { formatTimeSignatureDisplay } from '../../shared/timeSignatures';
+import { formatDisplayTitle, formatDisplayArtist } from '../../shared/formatters';
 import { EditIcon, CopyIcon, TrashIcon, PlusIcon, CheckIcon } from './Icons';
 
 interface SongDetailProps {
@@ -16,29 +17,38 @@ export const SongDetail: React.FC<SongDetailProps> = ({ song }) => {
     openSongModal,
     duplicateSong,
     deleteSong,
-    addSongToSetlist,
+    addSongToCurrentSetlist,
   } = useStore();
 
   const [notes, setNotes] = useState(song.notes || '');
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [isAddSetlistMenuOpen, setIsAddSetlistMenuOpen] = useState(false);
-  const [addedSetlistId, setAddedSetlistId] = useState<string | null>(null);
+  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
+  const [justAddedToSetlist, setJustAddedToSetlist] = useState(false);
 
-  const activeSetlists = (state?.setlists || []).filter(sl => !sl.archived);
-
-  // Keep track of the last saved timestamp from the store to prevent stale overwrites
+  const moreMenuRef = useRef<HTMLDivElement>(null);
   const clientLastSavedAtRef = useRef<number>(song.updatedAt);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const currentSongIdRef = useRef<string>(song.id);
 
-  // When selected song changes, flush any pending save for previous song and reset local state
+  // Close more menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
+        setIsMoreMenuOpen(false);
+      }
+    };
+    if (isMoreMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isMoreMenuOpen]);
+
+  // When selected song changes, flush pending save and reset state
   useEffect(() => {
     if (currentSongIdRef.current !== song.id) {
-      // Song switched: flush pending save if any
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
-        // Persist immediately for previous song
         updateSongNotes(currentSongIdRef.current, notes, clientLastSavedAtRef.current);
       }
       currentSongIdRef.current = song.id;
@@ -46,8 +56,8 @@ export const SongDetail: React.FC<SongDetailProps> = ({ song }) => {
       clientLastSavedAtRef.current = song.updatedAt;
       setSaveStatus('saved');
       setErrorMessage(null);
+      setIsMoreMenuOpen(false);
     } else {
-      // If store updated from external source and user is not actively editing
       if (saveStatus === 'saved' && song.notes !== notes) {
         setNotes(song.notes || '');
         clientLastSavedAtRef.current = song.updatedAt;
@@ -81,8 +91,6 @@ export const SongDetail: React.FC<SongDetailProps> = ({ song }) => {
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
-
-    // Debounce save 450ms
     saveTimeoutRef.current = setTimeout(() => {
       triggerSave(newText);
     }, 450);
@@ -101,9 +109,9 @@ export const SongDetail: React.FC<SongDetailProps> = ({ song }) => {
   };
 
   const handleDelete = () => {
-    const setlistCount = state?.setlistEntries.filter(e => e.songId === song.id).length || 0;
-    const confirmMsg = setlistCount > 0
-      ? `Are you sure you want to delete "${song.title}"?\n\nThis will remove all ${setlistCount} occurrence(s) of this song from active and archived setlists.\n\nThe song will be kept in Recently Deleted for 30 days.`
+    const occurrencesCount = (state?.currentSetlist || []).filter(e => e.songId === song.id).length;
+    const confirmMsg = occurrencesCount > 0
+      ? `Are you sure you want to delete "${song.title}"?\n\nThis will remove all ${occurrencesCount} occurrence(s) of this song from your current setlist.\n\nThe song will be kept in Recently Deleted for 30 days.`
       : `Are you sure you want to delete "${song.title}"?\n\nThe song will be moved to Recently Deleted for 30 days.`;
 
     if (window.confirm(confirmMsg)) {
@@ -111,118 +119,92 @@ export const SongDetail: React.FC<SongDetailProps> = ({ song }) => {
     }
   };
 
-  const handleAddToSetlist = async (setlistId: string) => {
-    await addSongToSetlist(setlistId, song.id);
-    setAddedSetlistId(setlistId);
+  const handleAddToSetlist = async () => {
+    await addSongToCurrentSetlist(song.id);
+    setJustAddedToSetlist(true);
     setTimeout(() => {
-      setAddedSetlistId(null);
-      setIsAddSetlistMenuOpen(false);
+      setJustAddedToSetlist(false);
     }, 1200);
   };
 
+  const displayTitle = formatDisplayTitle(song.title);
+  const displayArtist = formatDisplayArtist(song.artist);
+
   return (
-    <div className="song-detail-container" role="region" aria-label={`Details for ${song.title}`}>
-      {/* Fixed Song Header */}
+    <div className="song-detail-container" role="region" aria-label={`Details for ${displayTitle}`}>
+      {/* Fixed Song Header - Redesigned to guarantee full width and eliminate column squeezing */}
       <div className="song-header-fixed">
-        <div className="song-title-row">
-          <div className="song-title-info">
-            <h2 className="song-title-display">{song.title}</h2>
-            {song.artist ? (
-              <div className="song-artist-display">{song.artist}</div>
-            ) : (
-              <div className="song-artist-display" style={{ fontStyle: 'italic', opacity: 0.6 }}>No artist specified</div>
-            )}
-          </div>
+        {/* Full-width Title & Artist Block */}
+        <div className="song-header-title-block">
+          <h2 className="song-title-display">{displayTitle}</h2>
+          {displayArtist ? (
+            <div className="song-artist-display">{displayArtist}</div>
+          ) : null}
+        </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-            {/* Add to setlist button */}
-            <div style={{ position: 'relative' }}>
-              <button
-                className="btn"
-                onClick={() => setIsAddSetlistMenuOpen(!isAddSetlistMenuOpen)}
-                title="Add this song to a setlist"
-                aria-expanded={isAddSetlistMenuOpen}
-              >
-                <PlusIcon size={13} />
-                <span>Add to Setlist</span>
-              </button>
+        {/* Distinct Actions Row Beneath Title */}
+        <div className="song-header-actions-row">
+          <button
+            className={`btn ${justAddedToSetlist ? '' : 'btn-primary'}`}
+            style={{
+              background: justAddedToSetlist ? 'var(--success-bg)' : undefined,
+              color: justAddedToSetlist ? 'var(--success-color)' : undefined,
+              borderColor: justAddedToSetlist ? 'var(--success-color)' : undefined,
+            }}
+            onClick={handleAddToSetlist}
+            title="Add this song to your current setlist"
+          >
+            {justAddedToSetlist ? <CheckIcon size={13} /> : <PlusIcon size={13} />}
+            <span>{justAddedToSetlist ? 'Added to Setlist' : 'Add to Setlist'}</span>
+          </button>
 
-              {isAddSetlistMenuOpen && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: '100%',
-                    right: 0,
-                    marginTop: '4px',
-                    width: '220px',
-                    background: 'var(--bg-secondary)',
-                    border: '1px solid var(--border-strong)',
-                    borderRadius: '8px',
-                    boxShadow: 'var(--shadow-md)',
-                    zIndex: 20,
-                    padding: '6px',
+          <button
+            className="btn"
+            onClick={() => openSongModal('edit', song)}
+            title="Edit song title, artist, key, tempo, and signature"
+          >
+            <EditIcon size={13} />
+            <span>Edit Details</span>
+          </button>
+
+          {/* Labelled More… Overflow Menu for Duplicate & Delete */}
+          <div className="more-menu-container" ref={moreMenuRef} style={{ position: 'relative' }}>
+            <button
+              className="btn"
+              onClick={() => setIsMoreMenuOpen(!isMoreMenuOpen)}
+              title="More actions"
+              aria-expanded={isMoreMenuOpen}
+            >
+              <span>More ▾</span>
+            </button>
+
+            {isMoreMenuOpen && (
+              <div className="dropdown-menu">
+                <button
+                  className="dropdown-item"
+                  onClick={() => {
+                    setIsMoreMenuOpen(false);
+                    duplicateSong(song.id);
                   }}
                 >
-                  <div style={{ fontSize: '11px', fontWeight: 600, padding: '4px 8px', color: 'var(--text-muted)' }}>
-                    ACTIVE SETLISTS
-                  </div>
-                  {activeSetlists.length === 0 ? (
-                    <div style={{ padding: '6px 8px', fontSize: '12px', color: 'var(--text-muted)' }}>
-                      No active setlists available.
-                    </div>
-                  ) : (
-                    activeSetlists.map(sl => (
-                      <div
-                        key={sl.id}
-                        onClick={() => handleAddToSetlist(sl.id)}
-                        style={{
-                          padding: '6px 8px',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          fontSize: '12.5px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          background: addedSetlistId === sl.id ? 'var(--success-bg)' : 'transparent',
-                          color: addedSetlistId === sl.id ? 'var(--success-color)' : 'var(--text-primary)',
-                        }}
-                      >
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {sl.name}
-                        </span>
-                        {addedSetlistId === sl.id && <CheckIcon size={13} />}
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
+                  <CopyIcon size={13} />
+                  <span>Duplicate Song</span>
+                </button>
 
-            <button
-              className="btn"
-              onClick={() => duplicateSong(song.id)}
-              title="Duplicate song (create independent arrangement)"
-            >
-              <CopyIcon size={13} />
-              <span>Duplicate</span>
-            </button>
+                <div className="dropdown-separator" />
 
-            <button
-              className="btn"
-              onClick={() => openSongModal('edit', song)}
-              title="Edit song title, artist, key, BPM, and time signature"
-            >
-              <EditIcon size={13} />
-              <span>Edit Details</span>
-            </button>
-
-            <button
-              className="btn btn-danger"
-              onClick={handleDelete}
-              title="Delete song and remove from setlists"
-            >
-              <TrashIcon size={13} />
-            </button>
+                <button
+                  className="dropdown-item dropdown-item-danger"
+                  onClick={() => {
+                    setIsMoreMenuOpen(false);
+                    handleDelete();
+                  }}
+                >
+                  <TrashIcon size={13} />
+                  <span>Delete Song…</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -240,7 +222,7 @@ export const SongDetail: React.FC<SongDetailProps> = ({ song }) => {
           <div className="readout-card">
             <span className="readout-label">BPM</span>
             <div className={`readout-value ${!song.bpm ? 'unset' : ''}`}>
-              {song.bpm || '—'}
+              {song.bpm || 'Unset'}
             </div>
           </div>
 

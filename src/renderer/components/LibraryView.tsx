@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useStore } from '../hooks/useStore';
 import { SongDetail } from './SongDetail';
 import { searchSongs } from '../../shared/search';
-import { PlusIcon } from './Icons';
+import { formatDisplayTitle, formatDisplayArtist } from '../../shared/formatters';
 
 export const LibraryView: React.FC = () => {
   const {
@@ -10,7 +10,6 @@ export const LibraryView: React.FC = () => {
     selectedSongId,
     setSelectedSongId,
     searchQuery,
-    openSongModal,
     updatePreferences,
   } = useStore();
 
@@ -19,7 +18,6 @@ export const LibraryView: React.FC = () => {
   const startXRef = useRef(0);
   const startWidthRef = useRef(dividerWidth);
 
-  // Sync divider width from state
   useEffect(() => {
     if (state?.preferences.dividerWidth) {
       setDividerWidth(state.preferences.dividerWidth);
@@ -37,7 +35,7 @@ export const LibraryView: React.FC = () => {
     const handleMouseMove = (moveEvent: MouseEvent) => {
       if (!isDraggingRef.current) return;
       const delta = moveEvent.clientX - startXRef.current;
-      const newWidth = Math.max(220, Math.min(500, startWidthRef.current + delta));
+      const newWidth = Math.max(220, Math.min(520, startWidthRef.current + delta));
       setDividerWidth(newWidth);
     };
 
@@ -46,7 +44,6 @@ export const LibraryView: React.FC = () => {
         isDraggingRef.current = false;
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
-        // Persist divider width
         updatePreferences({ dividerWidth });
       }
       window.removeEventListener('mousemove', handleMouseMove);
@@ -83,18 +80,9 @@ export const LibraryView: React.FC = () => {
         style={{ width: `${dividerWidth}px` }}
       >
         <div className="item-list-header">
-          <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+          <span style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
             Songs ({searchResults.length})
           </span>
-          <button
-            className="btn"
-            style={{ height: '24px', padding: '0 8px', fontSize: '11.5px' }}
-            onClick={() => openSongModal('create')}
-            title="Add Song (⌘N)"
-          >
-            <PlusIcon size={12} />
-            <span>New</span>
-          </button>
         </div>
 
         <div className="item-list-scroll">
@@ -108,30 +96,35 @@ export const LibraryView: React.FC = () => {
               ) : (
                 <div>
                   <div style={{ fontWeight: 600, marginBottom: '4px' }}>Library is empty</div>
-                  <div style={{ fontSize: '12px' }}>Click "+ Add Song" to add your first song.</div>
+                  <div style={{ fontSize: '12px' }}>Use + Add Song in the toolbar or ⌘N to add your first song.</div>
                 </div>
               )}
             </div>
           ) : (
-            searchResults.map(({ song, isFuzzy }) => (
-              <div
-                key={song.id}
-                className={`song-row ${song.id === selectedSongId ? 'selected' : ''}`}
-                onClick={() => setSelectedSongId(song.id)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => e.key === 'Enter' && setSelectedSongId(song.id)}
-                aria-selected={song.id === selectedSongId}
-              >
-                <div className="song-row-title">
-                  {song.title}
-                  {isFuzzy && <span className="fuzzy-tag">Close match</span>}
+            searchResults.map(({ song, isFuzzy }) => {
+              const displayTitle = formatDisplayTitle(song.title);
+              const displayArtist = formatDisplayArtist(song.artist);
+
+              return (
+                <div
+                  key={song.id}
+                  className={`song-row ${song.id === selectedSongId ? 'selected' : ''}`}
+                  onClick={() => setSelectedSongId(song.id)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => e.key === 'Enter' && setSelectedSongId(song.id)}
+                  aria-selected={song.id === selectedSongId}
+                >
+                  <div className="song-row-title">
+                    {displayTitle}
+                    {isFuzzy && <span className="fuzzy-tag">Close match</span>}
+                  </div>
+                  {displayArtist ? (
+                    <div className="song-row-artist">{displayArtist}</div>
+                  ) : null}
                 </div>
-                {song.artist && (
-                  <div className="song-row-artist">{song.artist}</div>
-                )}
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>

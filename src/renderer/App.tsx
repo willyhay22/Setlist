@@ -3,9 +3,8 @@ import { StoreProvider, useStore } from './hooks/useStore';
 import { Header } from './components/Header';
 import { HomeView } from './components/HomeView';
 import { LibraryView } from './components/LibraryView';
-import { SetlistsView } from './components/SetlistsView';
+import { SetlistView } from './components/SetlistView';
 import { SongFormModal } from './components/SongFormModal';
-import { SetlistFormModal } from './components/SetlistFormModal';
 import { SettingsModal } from './components/SettingsModal';
 import { RecentlyDeletedModal } from './components/RecentlyDeletedModal';
 import { GuidedTour } from './components/GuidedTour';
@@ -16,17 +15,15 @@ const AppContent: React.FC = () => {
   const {
     activeTab,
     loading,
-    searchDetour,
+    searchDetourEntryId,
     returnFromDetour,
     undoToast,
     clearUndoToast,
     songModal,
     closeSongModal,
-    isSetlistModalOpen,
-    editingSetlist,
-    closeSetlistModal,
     isSettingsOpen,
     setIsSettingsOpen,
+    settingsInitialTab,
     isRecentlyDeletedOpen,
     setIsRecentlyDeletedOpen,
     isTourOpen,
@@ -35,7 +32,7 @@ const AppContent: React.FC = () => {
   if (loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--bg-primary)' }}>
-        <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Loading Studio Songs…</div>
+        <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Loading Setlist…</div>
       </div>
     );
   }
@@ -46,9 +43,9 @@ const AppContent: React.FC = () => {
       <Header />
 
       {/* Search Detour Banner */}
-      {searchDetour && (
+      {searchDetourEntryId && activeTab === 'library' && (
         <div className="detour-banner">
-          <span>Viewing search result while navigating a setlist.</span>
+          <span>Viewing search result while navigating your setlist.</span>
           <button
             className="btn btn-primary"
             style={{ height: '24px', padding: '0 8px', fontSize: '11.5px' }}
@@ -63,7 +60,7 @@ const AppContent: React.FC = () => {
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
         {activeTab === 'home' && <HomeView />}
         {activeTab === 'library' && <LibraryView />}
-        {activeTab === 'setlists' && <SetlistsView />}
+        {activeTab === 'setlist' && <SetlistView />}
       </div>
 
       {/* Toast Undo Banner */}
@@ -84,7 +81,7 @@ const AppContent: React.FC = () => {
         </div>
       )}
 
-      {/* Modals */}
+      {/* Modals & In-Window Panels */}
       {songModal?.isOpen && (
         <SongFormModal
           mode={songModal.mode}
@@ -93,15 +90,9 @@ const AppContent: React.FC = () => {
         />
       )}
 
-      {isSetlistModalOpen && (
-        <SetlistFormModal
-          setlist={editingSetlist}
-          onClose={closeSetlistModal}
-        />
-      )}
-
       {isSettingsOpen && (
         <SettingsModal
+          initialTab={settingsInitialTab}
           onClose={() => setIsSettingsOpen(false)}
         />
       )}

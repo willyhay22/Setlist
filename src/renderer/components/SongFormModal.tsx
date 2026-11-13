@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Song, SongInput } from '../../shared/types';
+import { Song } from '../../shared/types';
 import { useStore } from '../hooks/useStore';
 import { MUSICAL_KEYS } from '../../shared/keys';
 import { COMMON_TIME_SIGNATURES } from '../../shared/timeSignatures';
 import { normalizeSearch } from '../../shared/search';
+import { smartTitleCase } from '../../shared/formatters';
 import { CloseIcon } from './Icons';
 
 interface SongFormModalProps {
@@ -15,31 +16,62 @@ interface SongFormModalProps {
 export const SongFormModal: React.FC<SongFormModalProps> = ({ mode, song, onClose }) => {
   const { state, createSong, updateSongMetadata } = useStore();
 
-  const [title, setTitle] = useState(mode === 'duplicate' ? `${song?.title || ''} (Copy)` : song?.title || '');
-  const [artist, setArtist] = useState(song?.artist || '');
-  const [bpm, setBpm] = useState(song?.bpm || '');
-  const [musicalKey, setMusicalKey] = useState(song?.musicalKey || '');
+  // Initial field values:
+  // For new songs: BPM prefilled with "74", Key unset (""), Time Signature preselected to "4/4"
+  // For edit/duplicate: copy existing values as-is without backfilling!
+  const [title, setTitle] = useState(() => {
+    if (mode === 'duplicate' && song) return `${song.title} (Copy)`;
+    if (mode === 'edit' && song) return song.title;
+    return '';
+  });
+
+  const [artist, setArtist] = useState(() => {
+    if (song) return song.artist;
+    return '';
+  });
+
+  const [bpm, setBpm] = useState(() => {
+    if (song) return song.bpm;
+    return '74'; // New song default
+  });
+
+  const [musicalKey, setMusicalKey] = useState(() => {
+    if (song) return song.musicalKey;
+    return ''; // New song default: Unset
+  });
+
   const [selectedTsOption, setSelectedTsOption] = useState<string>(() => {
-    if (!song?.timeSignature) return '';
-    if ((COMMON_TIME_SIGNATURES as readonly string[]).includes(song.timeSignature)) {
+    if (song) {
+      if (!song.timeSignature) return '';
+      if ((COMMON_TIME_SIGNATURES as readonly string[]).includes(song.timeSignature)) {
+        return song.timeSignature;
+      }
+      return 'custom';
+    }
+    return '4/4'; // New song default: 4/4
+  });
+
+  const [customTs, setCustomTs] = useState<string>(() => {
+    if (song) {
+      if (!song.timeSignature) return '';
+      if ((COMMON_TIME_SIGNATURES as readonly string[]).includes(song.timeSignature)) {
+        return '';
+      }
       return song.timeSignature;
     }
-    return 'custom';
+    return '';
   });
-  const [customTs, setCustomTs] = useState<string>(() => {
-    if (!song?.timeSignature) return '';
-    if ((COMMON_TIME_SIGNATURES as readonly string[]).includes(song.timeSignature)) {
-      return '';
-    }
-    return song.timeSignature;
+
+  const [notes, setNotes] = useState(() => {
+    if (song) return song.notes;
+    return '';
   });
-  const [notes, setNotes] = useState(song?.notes || '');
+
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
 
   const titleInputRef = useRef<HTMLInputElement>(null);
 
-  // Focus title input on mount
   useEffect(() => {
     titleInputRef.current?.focus();
     titleInputRef.current?.select();
@@ -72,9 +104,35 @@ export const SongFormModal: React.FC<SongFormModalProps> = ({ mode, song, onClos
     }
   }, [title, artist, state?.songs, mode, song?.id]);
 
+  // On blur formatting: apply smart title-casing if entered in all-lowercase
+  const handleTitleBlur = () => {
+    if (title.trim()) {
+      const formatted = smartTitleCase(title);
+      if (formatted !== title) {
+        setTitle(formatted);
+      }
+    }
+  };
+
+  const handleArtistBlur = () => {
+    if (artist.trim()) {
+      const formatted = smartTitleCase(artist);
+      if (formatted !== artist) {
+        setArtist(formatted);
+      }
+    }
+  };
+
   const isFormDirty = () => {
     if (mode === 'create') {
-      return Boolean(title.trim() || artist.trim() || bpm.trim() || musicalKey || selectedTsOption || notes.trim());
+      return Boolean(
+        title.trim() ||
+        artist.trim() ||
+        (bpm.trim() !== '74' && bpm.trim() !== '') ||
+        musicalKey ||
+        selectedTsOption !== '4/4' ||
+        notes.trim()
+      );
     }
     if (mode === 'edit' && song) {
       const ts = selectedTsOption === 'custom' ? customTs.trim() : selectedTsOption;
@@ -99,7 +157,6 @@ export const SongFormModal: React.FC<SongFormModalProps> = ({ mode, song, onClos
     }
   };
 
-  // Esc key handler
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -119,11 +176,17 @@ export const SongFormModal: React.FC<SongFormModalProps> = ({ mode, song, onClos
   };
 
   const handleSubmit = async (addAnother: boolean = false) => {
-    const trimmedTitle = title.trim();
-    if (!trimmedTitle) {
+    let finalTitle = title.trim();
+    if (!finalTitle) {
       setErrorMessage('Title is required and cannot be whitespace-only.');
       titleInputRef.current?.focus();
       return;
+    }
+    finalTitle = smartTitleCase(finalTitle);
+
+    let finalArtist = artist.trim();
+    if (finalArtist) {
+      finalArtist = smartTitleCase(finalArtist);
     }
 
     setErrorMessage(null);
@@ -132,8 +195,8 @@ export const SongFormModal: React.FC<SongFormModalProps> = ({ mode, song, onClos
     try {
       if (mode === 'edit' && song) {
         await updateSongMetadata(song.id, {
-          title: trimmedTitle,
-          artist: artist.trim(),
+          title: finalTitle,
+          artist: finalArtist,
           bpm: bpm.trim(),
           musicalKey,
           timeSignature: finalTs,
@@ -142,8 +205,8 @@ export const SongFormModal: React.FC<SongFormModalProps> = ({ mode, song, onClos
       } else {
         // Create or Duplicate
         await createSong({
-          title: trimmedTitle,
-          artist: artist.trim(),
+          title: finalTitle,
+          artist: finalArtist,
           bpm: bpm.trim(),
           musicalKey,
           timeSignature: finalTs,
@@ -151,11 +214,12 @@ export const SongFormModal: React.FC<SongFormModalProps> = ({ mode, song, onClos
         });
 
         if (addAnother) {
+          // Reset to clean new-song defaults!
           setTitle('');
           setArtist('');
-          setBpm('');
+          setBpm('74');
           setMusicalKey('');
-          setSelectedTsOption('');
+          setSelectedTsOption('4/4');
           setCustomTs('');
           setNotes('');
           setDuplicateWarning(null);
@@ -210,23 +274,23 @@ export const SongFormModal: React.FC<SongFormModalProps> = ({ mode, song, onClos
               ref={titleInputRef}
               type="text"
               className="form-input"
-              placeholder="e.g. Living Hope"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
+              onBlur={handleTitleBlur}
               required
             />
           </div>
 
           {/* Artist */}
           <div className="form-group">
-            <label className="form-label" htmlFor="song-artist-input">Artist / Composer (optional)</label>
+            <label className="form-label" htmlFor="song-artist-input">Artist / Composer</label>
             <input
               id="song-artist-input"
               type="text"
               className="form-input"
-              placeholder="e.g. Phil Wickham"
               value={artist}
               onChange={(e) => setArtist(e.target.value)}
+              onBlur={handleArtistBlur}
             />
           </div>
 
@@ -238,7 +302,6 @@ export const SongFormModal: React.FC<SongFormModalProps> = ({ mode, song, onClos
                 id="song-bpm-input"
                 type="text"
                 className="form-input"
-                placeholder='e.g. 72.5 or "72 verse, 76 chorus"'
                 value={bpm}
                 onChange={(e) => setBpm(e.target.value)}
               />
@@ -252,7 +315,7 @@ export const SongFormModal: React.FC<SongFormModalProps> = ({ mode, song, onClos
                 value={musicalKey}
                 onChange={(e) => setMusicalKey(e.target.value)}
               >
-                <option value="">Unset (—)</option>
+                <option value="">Unset</option>
                 <optgroup label="Major Keys">
                   {MUSICAL_KEYS.filter(k => k.mode === 'major').map(k => (
                     <option key={k.value} value={k.value}>{k.label}</option>
@@ -277,7 +340,7 @@ export const SongFormModal: React.FC<SongFormModalProps> = ({ mode, song, onClos
                 value={selectedTsOption}
                 onChange={(e) => setSelectedTsOption(e.target.value)}
               >
-                <option value="">Unset (—)</option>
+                <option value="">Unset</option>
                 {COMMON_TIME_SIGNATURES.map(ts => (
                   <option key={ts} value={ts}>{ts}</option>
                 ))}
@@ -288,7 +351,7 @@ export const SongFormModal: React.FC<SongFormModalProps> = ({ mode, song, onClos
                 <input
                   type="text"
                   className="form-input"
-                  placeholder="e.g. 5/4 or 7/8"
+                  placeholder="e.g. 5/4"
                   value={customTs}
                   onChange={(e) => setCustomTs(e.target.value)}
                   style={{ width: '130px' }}
@@ -300,12 +363,11 @@ export const SongFormModal: React.FC<SongFormModalProps> = ({ mode, song, onClos
           {/* Initial Notes (only when creating/duplicating; editing metadata keeps notes separate) */}
           {mode !== 'edit' && (
             <div className="form-group">
-              <label className="form-label" htmlFor="song-notes-input">Initial Notes (optional)</label>
+              <label className="form-label" htmlFor="song-notes-input">Initial Notes</label>
               <textarea
                 id="song-notes-input"
                 className="form-textarea"
                 rows={3}
-                placeholder="Arrangement notes, structure, intro cues…"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
               />

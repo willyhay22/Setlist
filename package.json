@@ -1,7 +1,8 @@
 {
-  "name": "studio-songs",
-  "version": "1.0.0",
-  "description": "Studio Songs - Offline quick reference tool for church studio Mac",
+  "name": "setlist",
+  "version": "1.1.0",
+  "description": "Setlist - Offline musical reference and service running order tool",
+  "author": "William Hay",
   "main": "dist-electron/main/main.js",
   "scripts": {
     "dev": "vite",
@@ -10,7 +11,7 @@
     "build": "npm run build:renderer && npm run build:electron",
     "package": "npm run build && electron-builder --mac --dir",
     "package:dmg": "npm run build && electron-builder --mac",
-    "test": "node --test dist-test/**/*.test.js"
+    "test": "npx tsc -p tsconfig.test.json && node --test dist-unit-tests/tests/*.test.js"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
@@ -26,7 +27,7 @@
   },
   "build": {
     "appId": "com.studiosongs.app",
-    "productName": "Studio Songs",
+    "productName": "Setlist",
     "mac": {
       "category": "public.app-category.music",
       "target": ["dir"]

@@ -50,7 +50,7 @@ export const MUSICAL_KEYS: KeyOption[] = [
 ];
 
 export function formatKeyDisplay(keyStr: string): string {
-  if (!keyStr) return '—';
+  if (!keyStr) return 'Unset';
   const found = MUSICAL_KEYS.find(k => k.value === keyStr);
   return found ? found.label : keyStr;
 }

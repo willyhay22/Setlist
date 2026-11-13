@@ -2,7 +2,7 @@ export type TextSize = 'small' | 'standard' | 'large' | 'x-large';
 export type ThemePreference = 'system' | 'light' | 'dark';
 
 export const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
-export const CURRENT_SCHEMA_VERSION = 1;
+export const CURRENT_SCHEMA_VERSION = 2; // v1.1 single setlist schema
 
 export interface Song {
   id: string;
@@ -17,10 +17,17 @@ export interface Song {
   deletedAt: number | null; // null if active; ms timestamp when moved to Recently Deleted
 }
 
+export interface CurrentSetlistEntry {
+  id: string; // Unique occurrence ID
+  songId: string; // References song.id
+  position: number; // 0-based index
+}
+
+// Retained for migration data integrity and legacy backup support
 export interface Setlist {
   id: string;
   name: string;
-  date: string; // Stored as "YYYY-MM-DD" calendar date without timezone shift
+  date: string;
   notes: string;
   archived: boolean;
   createdAt: number;
@@ -28,10 +35,10 @@ export interface Setlist {
 }
 
 export interface SetlistEntry {
-  id: string; // Stable ID unique to each occurrence
+  id: string;
   setlistId: string;
-  songId: string; // References song.id (single source of truth)
-  position: number; // 0-based ordering within setlist
+  songId: string;
+  position: number;
 }
 
 export interface AppPreferences {
@@ -39,7 +46,7 @@ export interface AppPreferences {
   theme: ThemePreference;
   hasCompletedTour: boolean;
   recentSongIds: string[];
-  recentSetlistIds: string[];
+  recentSetlistIds?: string[]; // Legacy
   dividerWidth: number;
   windowBounds?: {
     x?: number;
@@ -53,8 +60,10 @@ export interface AppPreferences {
 export interface AppData {
   schemaVersion: number;
   songs: Song[];
-  setlists: Setlist[];
-  setlistEntries: SetlistEntry[];
+  currentSetlist: CurrentSetlistEntry[];
+  legacySetlists?: Setlist[];
+  legacySetlistEntries?: SetlistEntry[];
+  migrationPendingChoice?: boolean;
   preferences: AppPreferences;
 }
 
@@ -63,8 +72,12 @@ export interface ExportBackupData {
   exportTimestamp: number;
   appVersion: string;
   songs: Song[];
-  setlists: Setlist[];
-  setlistEntries: SetlistEntry[];
+  currentSetlist: CurrentSetlistEntry[];
+  legacySetlists?: Setlist[];
+  legacySetlistEntries?: SetlistEntry[];
+  // Also keep old setlists array for backward compatibility if needed
+  setlists?: Setlist[];
+  setlistEntries?: SetlistEntry[];
   preferences?: {
     textSize: TextSize;
     theme: ThemePreference;
@@ -79,10 +92,8 @@ export interface ImportResult {
   success: boolean;
   addedSongsCount: number;
   skippedSongsCount: number;
-  addedSetlistsCount: number;
-  skippedSetlistsCount: number;
-  addedEntriesCount: number;
-  skippedEntriesCount: number;
+  importedSetlistCount?: number;
+  skippedSetlistMessage?: string;
   purgedResurrectionsBlockedCount: number;
   message?: string;
   errors?: string[];
@@ -94,11 +105,5 @@ export interface SongInput {
   bpm?: string;
   musicalKey?: string;
   timeSignature?: string;
-  notes?: string;
-}
-
-export interface SetlistInput {
-  name: string;
-  date?: string;
   notes?: string;
 }

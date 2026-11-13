@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import {
   AppData,
   Song,
+  CurrentSetlistEntry,
   Setlist,
   SetlistEntry,
   AppPreferences,
@@ -11,11 +12,10 @@ import {
   ImportOptions,
   ImportResult,
   SongInput,
-  SetlistInput,
+  CURRENT_SCHEMA_VERSION,
+  THIRTY_DAYS_MS,
 } from '../shared/types';
-
-export const CURRENT_SCHEMA_VERSION = 1;
-export const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+import { smartTitleCase } from '../shared/formatters';
 
 export function generateId(prefix: string = 'id'): string {
   return `${prefix}_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
@@ -26,6 +26,7 @@ export function normalizeString(str: string): string {
 }
 
 export class DurableStore {
+  private storageDir: string;
   private dataFilePath: string;
   private backupFilePath: string;
   private memoryData: AppData | null = null;
@@ -33,6 +34,7 @@ export class DurableStore {
   private pendingSavesCount = 0;
 
   constructor(storageDir: string) {
+    this.storageDir = storageDir;
     if (!fs.existsSync(storageDir)) {
       fs.mkdirSync(storageDir, { recursive: true });
     }
@@ -85,14 +87,12 @@ export class DurableStore {
     return {
       schemaVersion: CURRENT_SCHEMA_VERSION,
       songs: [],
-      setlists: [],
-      setlistEntries: [],
+      currentSetlist: [],
       preferences: {
         textSize: 'standard',
         theme: 'system',
         hasCompletedTour: false,
         recentSongIds: [],
-        recentSetlistIds: [],
         dividerWidth: 320,
         purgedSongIds: [],
       },
@@ -109,6 +109,7 @@ export class DurableStore {
       throw new Error(`Unsupported schema version: ${version} (expected <= ${CURRENT_SCHEMA_VERSION})`);
     }
 
+    // Validate songs
     const songs: Song[] = Array.isArray(data.songs) ? data.songs.map((s: any) => ({
       id: String(s.id || generateId('song')),
       title: String(s.title || '').trim(),
@@ -122,22 +123,67 @@ export class DurableStore {
       deletedAt: s.deletedAt != null ? Number(s.deletedAt) : null,
     })) : [];
 
-    const setlists: Setlist[] = Array.isArray(data.setlists) ? data.setlists.map((sl: any) => ({
-      id: String(sl.id || generateId('setlist')),
-      name: String(sl.name || '').trim(),
-      date: String(sl.date || ''),
-      notes: typeof sl.notes === 'string' ? sl.notes : '',
-      archived: Boolean(sl.archived),
-      createdAt: Number(sl.createdAt) || Date.now(),
-      updatedAt: Number(sl.updatedAt) || Date.now(),
-    })) : [];
+    let currentSetlist: CurrentSetlistEntry[] = [];
+    let legacySetlists: Setlist[] | undefined = Array.isArray(data.legacySetlists) ? data.legacySetlists : undefined;
+    let legacySetlistEntries: SetlistEntry[] | undefined = Array.isArray(data.legacySetlistEntries) ? data.legacySetlistEntries : undefined;
+    let migrationPendingChoice = Boolean(data.migrationPendingChoice);
 
-    const setlistEntries: SetlistEntry[] = Array.isArray(data.setlistEntries) ? data.setlistEntries.map((e: any, idx: number) => ({
-      id: String(e.id || generateId('entry')),
-      setlistId: String(e.setlistId),
-      songId: String(e.songId),
-      position: typeof e.position === 'number' ? e.position : idx,
-    })) : [];
+    // v1.0 -> v1.1 Migration: migrate named setlists into single currentSetlist
+    if (version === 1) {
+      // Take a pre-migration snapshot first to guarantee zero data loss
+      try {
+        const snapshotPath = path.join(this.storageDir, 'studio_songs_data.pre-v1.1.json');
+        if (!fs.existsSync(snapshotPath) && fs.existsSync(this.dataFilePath)) {
+          fs.copyFileSync(this.dataFilePath, snapshotPath);
+        }
+      } catch (snapshotErr) {
+        console.warn('Could not write pre-migration snapshot:', snapshotErr);
+      }
+
+      const rawLegacySetlists = Array.isArray(data.setlists) ? data.setlists : [];
+      const rawLegacyEntries = Array.isArray(data.setlistEntries) ? data.setlistEntries : [];
+      legacySetlists = rawLegacySetlists;
+      legacySetlistEntries = rawLegacyEntries;
+
+      const activeSetlists = rawLegacySetlists.filter((sl: any) => !sl.archived);
+
+      if (activeSetlists.length === 1) {
+        // Exactly one active setlist: use its entries as current setlist
+        const targetId = activeSetlists[0].id;
+        currentSetlist = rawLegacyEntries
+          .filter((e: any) => e.setlistId === targetId)
+          .sort((a: any, b: any) => a.position - b.position)
+          .map((e: any, idx: number) => ({
+            id: String(e.id || generateId('entry')),
+            songId: String(e.songId),
+            position: idx,
+          }));
+      } else if (activeSetlists.length > 1) {
+        // Multiple active setlists: sort by most recently updated as default, and mark pending choice
+        const sorted = [...activeSetlists].sort((a: any, b: any) => (b.updatedAt || 0) - (a.updatedAt || 0));
+        const targetId = sorted[0].id;
+        currentSetlist = rawLegacyEntries
+          .filter((e: any) => e.setlistId === targetId)
+          .sort((a: any, b: any) => a.position - b.position)
+          .map((e: any, idx: number) => ({
+            id: String(e.id || generateId('entry')),
+            songId: String(e.songId),
+            position: idx,
+          }));
+        migrationPendingChoice = true;
+      } else {
+        currentSetlist = [];
+      }
+    } else {
+      // Version 2 format
+      currentSetlist = Array.isArray(data.currentSetlist)
+        ? data.currentSetlist.map((e: any, idx: number) => ({
+            id: String(e.id || generateId('entry')),
+            songId: String(e.songId),
+            position: typeof e.position === 'number' ? e.position : idx,
+          }))
+        : [];
+    }
 
     const prefs = data.preferences || {};
     const preferences: AppPreferences = {
@@ -145,7 +191,6 @@ export class DurableStore {
       theme: ['system', 'light', 'dark'].includes(prefs.theme) ? prefs.theme : 'system',
       hasCompletedTour: Boolean(prefs.hasCompletedTour),
       recentSongIds: Array.isArray(prefs.recentSongIds) ? prefs.recentSongIds.filter((id: any) => typeof id === 'string') : [],
-      recentSetlistIds: Array.isArray(prefs.recentSetlistIds) ? prefs.recentSetlistIds.filter((id: any) => typeof id === 'string') : [],
       dividerWidth: typeof prefs.dividerWidth === 'number' && prefs.dividerWidth >= 200 && prefs.dividerWidth <= 600 ? prefs.dividerWidth : 320,
       windowBounds: prefs.windowBounds && typeof prefs.windowBounds === 'object' ? prefs.windowBounds : undefined,
       purgedSongIds: Array.isArray(prefs.purgedSongIds) ? prefs.purgedSongIds.filter((id: any) => typeof id === 'string') : [],
@@ -154,8 +199,10 @@ export class DurableStore {
     return {
       schemaVersion: CURRENT_SCHEMA_VERSION,
       songs,
-      setlists,
-      setlistEntries,
+      currentSetlist,
+      legacySetlists,
+      legacySetlistEntries,
+      migrationPendingChoice,
       preferences,
     };
   }
@@ -167,7 +214,7 @@ export class DurableStore {
       .finally(() => {
         this.pendingSavesCount--;
       });
-    this.writeQueue = queued.catch(() => {}); // prevent chain rejection
+    this.writeQueue = queued.catch(() => {});
     return queued;
   }
 
@@ -175,7 +222,6 @@ export class DurableStore {
     const jsonString = JSON.stringify(state, null, 2);
     const tmpPath = `${this.dataFilePath}.tmp.${Date.now()}.${Math.random().toString(36).slice(2, 6)}`;
 
-    // Write to temporary file with sync
     const fd = fs.openSync(tmpPath, 'w');
     try {
       fs.writeFileSync(fd, jsonString, 'utf-8');
@@ -184,10 +230,8 @@ export class DurableStore {
       fs.closeSync(fd);
     }
 
-    // Atomic swap via rename
     fs.renameSync(tmpPath, this.dataFilePath);
 
-    // Also update backup file asynchronously
     try {
       fs.writeFileSync(this.backupFilePath, jsonString, 'utf-8');
     } catch {
@@ -225,7 +269,7 @@ export class DurableStore {
     const normalizedTitle = normalizeString(trimmedTitle);
     const normalizedArtist = normalizeString(input.artist || '');
 
-    // Check duplicate warning
+    // Duplicate arrangement warning
     let warning: string | undefined;
     const existingMatch = state.songs.find(
       s => s.deletedAt === null &&
@@ -238,13 +282,22 @@ export class DurableStore {
     }
 
     const now = Date.now();
+
+    // Practical v1.1 Defaults for a genuinely new song:
+    // BPM defaults to "74" if empty/whitespace
+    const bpm = input.bpm !== undefined && input.bpm.trim() !== '' ? input.bpm.trim() : '74';
+    // Time Signature defaults to "4/4" if empty/whitespace
+    const timeSignature = input.timeSignature !== undefined && input.timeSignature.trim() !== '' ? input.timeSignature.trim() : '4/4';
+    // Musical Key: unset (empty string)
+    const musicalKey = (input.musicalKey || '').trim();
+
     const newSong: Song = {
       id: generateId('song'),
       title: trimmedTitle,
       artist: (input.artist || '').trim(),
-      bpm: (input.bpm || '').trim(),
-      musicalKey: (input.musicalKey || '').trim(),
-      timeSignature: (input.timeSignature || '').trim(),
+      bpm,
+      musicalKey,
+      timeSignature,
       notes: input.notes || '',
       createdAt: now,
       updatedAt: now,
@@ -252,9 +305,7 @@ export class DurableStore {
     };
 
     await this.queueWrite(async () => {
-      // Append to bottom of library
       this.memoryData!.songs.push(newSong);
-      // Track in recents
       this.touchRecentSong(newSong.id);
       await this.persistDirect(this.memoryData!);
     });
@@ -288,7 +339,6 @@ export class DurableStore {
       if (input.musicalKey !== undefined) s.musicalKey = input.musicalKey.trim();
       if (input.timeSignature !== undefined) s.timeSignature = input.timeSignature.trim();
       s.updatedAt = Date.now();
-      // Keep createdAt unchanged! Creation order is preserved!
 
       updatedSong = { ...s };
       await this.persistDirect(this.memoryData!);
@@ -305,9 +355,7 @@ export class DurableStore {
       if (!s) {
         throw new Error(`Song not found: ${songId}`);
       }
-      // Guard against older asynchronous saves overwriting newer edits
       if (s.updatedAt > clientUpdatedAt) {
-        // Newer write already happened; ignore stale overwrite
         return;
       }
       s.notes = notes;
@@ -327,6 +375,7 @@ export class DurableStore {
     }
 
     const now = Date.now();
+    // Copy actual data rather than applying new-song defaults!
     const copy: Song = {
       id: generateId('song'),
       title: `${original.title} (Copy)`,
@@ -335,7 +384,7 @@ export class DurableStore {
       musicalKey: original.musicalKey,
       timeSignature: original.timeSignature,
       notes: original.notes,
-      createdAt: now, // new identity and creation order
+      createdAt: now,
       updatedAt: now,
       deletedAt: null,
     };
@@ -359,10 +408,17 @@ export class DurableStore {
       s.deletedAt = Date.now();
       s.updatedAt = Date.now();
 
-      // Transactionally remove all setlist entries referencing this song from both active and archived setlists
-      this.memoryData!.setlistEntries = this.memoryData!.setlistEntries.filter(
-        entry => entry.songId !== songId
-      );
+      // Transactionally remove all occurrences from currentSetlist
+      this.memoryData!.currentSetlist = this.memoryData!.currentSetlist
+        .filter(entry => entry.songId !== songId)
+        .map((entry, idx) => ({ ...entry, position: idx }));
+
+      // Also clean legacy entries if any
+      if (this.memoryData!.legacySetlistEntries) {
+        this.memoryData!.legacySetlistEntries = this.memoryData!.legacySetlistEntries.filter(
+          e => e.songId !== songId
+        );
+      }
 
       // Remove from recents
       this.memoryData!.preferences.recentSongIds = this.memoryData!.preferences.recentSongIds.filter(
@@ -416,17 +472,16 @@ export class DurableStore {
 
       if (purgedCount > 0) {
         this.memoryData!.songs = remainingSongs;
-        // Keep tombstone IDs bounded to 5000 to prevent unbounded growth while blocking resurrection
         const existingPurged = new Set(this.memoryData!.preferences.purgedSongIds || []);
         for (const pid of purgedIds) {
           existingPurged.add(pid);
         }
         this.memoryData!.preferences.purgedSongIds = Array.from(existingPurged).slice(-5000);
 
-        // Also clean any orphan entries just in case
-        this.memoryData!.setlistEntries = this.memoryData!.setlistEntries.filter(
-          entry => !existingPurged.has(entry.songId)
-        );
+        // Also clean any orphan occurrences in currentSetlist
+        this.memoryData!.currentSetlist = this.memoryData!.currentSetlist
+          .filter(entry => !existingPurged.has(entry.songId))
+          .map((entry, idx) => ({ ...entry, position: idx }));
 
         await this.persistDirect(this.memoryData!);
       }
@@ -435,183 +490,93 @@ export class DurableStore {
     return purgedCount;
   }
 
-  // --- Setlist Operations ---
+  // --- Current Setlist Operations ---
 
-  public async createSetlist(input: SetlistInput): Promise<Setlist> {
-    const trimmedName = input.name ? input.name.trim() : '';
-    if (!trimmedName) {
-      throw new Error('Setlist name is required');
-    }
-
-    const now = Date.now();
-    const setlist: Setlist = {
-      id: generateId('setlist'),
-      name: trimmedName,
-      date: (input.date || '').trim(),
-      notes: input.notes || '',
-      archived: false,
-      createdAt: now,
-      updatedAt: now,
-    };
+  public async addSongToCurrentSetlist(songId: string): Promise<CurrentSetlistEntry> {
+    let newEntry: CurrentSetlistEntry | null = null;
 
     await this.queueWrite(async () => {
-      this.memoryData!.setlists.push(setlist);
-      this.touchRecentSetlist(setlist.id);
-      await this.persistDirect(this.memoryData!);
-    });
-
-    return setlist;
-  }
-
-  public async updateSetlist(
-    setlistId: string,
-    input: SetlistInput
-  ): Promise<Setlist> {
-    const trimmedName = input.name ? input.name.trim() : '';
-    if (!trimmedName) {
-      throw new Error('Setlist name is required');
-    }
-
-    let updatedSetlist: Setlist | null = null;
-
-    await this.queueWrite(async () => {
-      const sl = this.memoryData!.setlists.find(item => item.id === setlistId);
-      if (!sl) {
-        throw new Error(`Setlist not found: ${setlistId}`);
-      }
-
-      sl.name = trimmedName;
-      if (input.date !== undefined) sl.date = input.date.trim();
-      if (input.notes !== undefined) sl.notes = input.notes;
-      sl.updatedAt = Date.now();
-
-      updatedSetlist = { ...sl };
-      await this.persistDirect(this.memoryData!);
-    });
-
-    return updatedSetlist!;
-  }
-
-  public async setSetlistArchived(setlistId: string, archived: boolean): Promise<Setlist> {
-    let updatedSetlist: Setlist | null = null;
-
-    await this.queueWrite(async () => {
-      const sl = this.memoryData!.setlists.find(item => item.id === setlistId);
-      if (!sl) {
-        throw new Error(`Setlist not found: ${setlistId}`);
-      }
-
-      sl.archived = archived;
-      sl.updatedAt = Date.now();
-
-      if (archived) {
-        // Exclude from recents
-        this.memoryData!.preferences.recentSetlistIds = this.memoryData!.preferences.recentSetlistIds.filter(
-          id => id !== setlistId
-        );
-      }
-
-      updatedSetlist = { ...sl };
-      await this.persistDirect(this.memoryData!);
-    });
-
-    return updatedSetlist!;
-  }
-
-  public async addSongToSetlist(setlistId: string, songId: string): Promise<SetlistEntry> {
-    let newEntry: SetlistEntry | null = null;
-
-    await this.queueWrite(async () => {
-      const sl = this.memoryData!.setlists.find(item => item.id === setlistId);
-      if (!sl) throw new Error(`Setlist not found: ${setlistId}`);
-
       const s = this.memoryData!.songs.find(item => item.id === songId && item.deletedAt === null);
       if (!s) throw new Error(`Active song not found: ${songId}`);
 
-      const currentEntries = this.memoryData!.setlistEntries.filter(e => e.setlistId === setlistId);
-      const position = currentEntries.length;
-
+      const position = this.memoryData!.currentSetlist.length;
       newEntry = {
         id: generateId('entry'),
-        setlistId,
         songId,
         position,
       };
 
-      this.memoryData!.setlistEntries.push(newEntry);
-      sl.updatedAt = Date.now();
+      this.memoryData!.currentSetlist.push(newEntry);
       await this.persistDirect(this.memoryData!);
     });
 
     return newEntry!;
   }
 
-  public async addMultipleSongsToSetlist(setlistId: string, songIds: string[]): Promise<SetlistEntry[]> {
-    const createdEntries: SetlistEntry[] = [];
+  public async addMultipleSongsToCurrentSetlist(songIds: string[]): Promise<CurrentSetlistEntry[]> {
+    const createdEntries: CurrentSetlistEntry[] = [];
 
     await this.queueWrite(async () => {
-      const sl = this.memoryData!.setlists.find(item => item.id === setlistId);
-      if (!sl) throw new Error(`Setlist not found: ${setlistId}`);
-
-      const currentEntries = this.memoryData!.setlistEntries.filter(e => e.setlistId === setlistId);
-      let nextPos = currentEntries.length;
+      let nextPos = this.memoryData!.currentSetlist.length;
 
       for (const songId of songIds) {
         const s = this.memoryData!.songs.find(item => item.id === songId && item.deletedAt === null);
         if (s) {
-          const entry: SetlistEntry = {
+          const entry: CurrentSetlistEntry = {
             id: generateId('entry'),
-            setlistId,
             songId,
             position: nextPos++,
           };
-          this.memoryData!.setlistEntries.push(entry);
+          this.memoryData!.currentSetlist.push(entry);
           createdEntries.push(entry);
         }
       }
 
-      sl.updatedAt = Date.now();
       await this.persistDirect(this.memoryData!);
     });
 
     return createdEntries;
   }
 
-  public async reorderSetlistEntries(setlistId: string, orderedEntryIds: string[]): Promise<void> {
+  public async reorderCurrentSetlist(orderedEntryIds: string[]): Promise<void> {
     await this.queueWrite(async () => {
-      const sl = this.memoryData!.setlists.find(item => item.id === setlistId);
-      if (!sl) throw new Error(`Setlist not found: ${setlistId}`);
+      const entryMap = new Map(this.memoryData!.currentSetlist.map(e => [e.id, e]));
+      const reordered: CurrentSetlistEntry[] = [];
 
-      orderedEntryIds.forEach((id, index) => {
-        const entry = this.memoryData!.setlistEntries.find(e => e.id === id && e.setlistId === setlistId);
+      orderedEntryIds.forEach((id, idx) => {
+        const entry = entryMap.get(id);
         if (entry) {
-          entry.position = index;
+          entry.position = idx;
+          reordered.push(entry);
+          entryMap.delete(id);
         }
       });
 
-      sl.updatedAt = Date.now();
+      // Append any unmentioned entries at end
+      for (const remaining of entryMap.values()) {
+        remaining.position = reordered.length;
+        reordered.push(remaining);
+      }
+
+      this.memoryData!.currentSetlist = reordered;
       await this.persistDirect(this.memoryData!);
     });
   }
 
-  public async removeSetlistEntry(entryId: string): Promise<{ removedEntry: SetlistEntry; formerPosition: number }> {
-    let result: { removedEntry: SetlistEntry; formerPosition: number } | null = null;
+  public async removeCurrentSetlistEntry(entryId: string): Promise<{ removedEntry: CurrentSetlistEntry; formerPosition: number }> {
+    let result: { removedEntry: CurrentSetlistEntry; formerPosition: number } | null = null;
 
     await this.queueWrite(async () => {
-      const index = this.memoryData!.setlistEntries.findIndex(e => e.id === entryId);
+      const index = this.memoryData!.currentSetlist.findIndex(e => e.id === entryId);
       if (index === -1) {
         throw new Error(`Setlist entry not found: ${entryId}`);
       }
 
-      const [removed] = this.memoryData!.setlistEntries.splice(index, 1);
+      const [removed] = this.memoryData!.currentSetlist.splice(index, 1);
       const formerPos = removed.position;
 
-      // Re-index remaining entries in this setlist
-      const siblings = this.memoryData!.setlistEntries
-        .filter(e => e.setlistId === removed.setlistId)
-        .sort((a, b) => a.position - b.position);
-
-      siblings.forEach((e, idx) => {
+      // Re-index remaining entries
+      this.memoryData!.currentSetlist.forEach((e, idx) => {
         e.position = idx;
       });
 
@@ -622,32 +587,68 @@ export class DurableStore {
     return result!;
   }
 
-  public async restoreSetlistEntry(entry: SetlistEntry, targetPosition: number): Promise<void> {
+  public async restoreCurrentSetlistEntry(entry: CurrentSetlistEntry, targetPosition: number): Promise<void> {
     await this.queueWrite(async () => {
-      const sl = this.memoryData!.setlists.find(item => item.id === entry.setlistId);
-      if (!sl) throw new Error(`Setlist not found: ${entry.setlistId}`);
-
       const s = this.memoryData!.songs.find(item => item.id === entry.songId && item.deletedAt === null);
       if (!s) throw new Error(`Song is deleted or no longer exists: ${entry.songId}`);
 
-      const siblings = this.memoryData!.setlistEntries
-        .filter(e => e.setlistId === entry.setlistId && e.id !== entry.id)
-        .sort((a, b) => a.position - b.position);
+      const list = this.memoryData!.currentSetlist.filter(e => e.id !== entry.id);
+      const clampedPos = Math.max(0, Math.min(targetPosition, list.length));
+      list.splice(clampedPos, 0, entry);
 
-      const clampedPos = Math.max(0, Math.min(targetPosition, siblings.length));
-      siblings.splice(clampedPos, 0, entry);
-
-      siblings.forEach((e, idx) => {
+      list.forEach((e, idx) => {
         e.position = idx;
       });
 
-      // Update in master array
-      const existingIdx = this.memoryData!.setlistEntries.findIndex(e => e.id === entry.id);
-      if (existingIdx !== -1) {
-        this.memoryData!.setlistEntries.splice(existingIdx, 1);
-      }
-      this.memoryData!.setlistEntries.push(entry);
+      this.memoryData!.currentSetlist = list;
+      await this.persistDirect(this.memoryData!);
+    });
+  }
 
+  public async clearCurrentSetlist(): Promise<{ formerEntries: CurrentSetlistEntry[] }> {
+    let formerEntries: CurrentSetlistEntry[] = [];
+
+    await this.queueWrite(async () => {
+      formerEntries = [...this.memoryData!.currentSetlist];
+      this.memoryData!.currentSetlist = [];
+      await this.persistDirect(this.memoryData!);
+    });
+
+    return { formerEntries };
+  }
+
+  public async restoreClearedSetlist(entries: CurrentSetlistEntry[]): Promise<void> {
+    await this.queueWrite(async () => {
+      // Validate that songs still exist and are not deleted
+      const activeSongIds = new Set(
+        this.memoryData!.songs.filter(s => s.deletedAt === null).map(s => s.id)
+      );
+
+      const validEntries = entries
+        .filter(e => activeSongIds.has(e.songId))
+        .map((e, idx) => ({ ...e, position: idx }));
+
+      this.memoryData!.currentSetlist = validEntries;
+      await this.persistDirect(this.memoryData!);
+    });
+  }
+
+  // --- Migration Helper: Choose legacy setlist as current setlist ---
+  public async chooseMigrationSetlist(legacySetlistId: string): Promise<void> {
+    await this.queueWrite(async () => {
+      if (!this.memoryData!.legacySetlistEntries) return;
+
+      const entries = this.memoryData!.legacySetlistEntries
+        .filter(e => e.setlistId === legacySetlistId)
+        .sort((a, b) => a.position - b.position)
+        .map((e, idx) => ({
+          id: generateId('entry'),
+          songId: e.songId,
+          position: idx,
+        }));
+
+      this.memoryData!.currentSetlist = entries;
+      this.memoryData!.migrationPendingChoice = false;
       await this.persistDirect(this.memoryData!);
     });
   }
@@ -668,12 +669,6 @@ export class DurableStore {
     this.memoryData.preferences.recentSongIds = [songId, ...existing].slice(0, 10);
   }
 
-  public touchRecentSetlist(setlistId: string): void {
-    if (!this.memoryData) return;
-    const existing = this.memoryData.preferences.recentSetlistIds.filter(id => id !== setlistId);
-    this.memoryData.preferences.recentSetlistIds = [setlistId, ...existing].slice(0, 10);
-  }
-
   // --- Export and Merge Import ---
 
   public exportBackup(): ExportBackupData {
@@ -681,10 +676,11 @@ export class DurableStore {
     return {
       schemaVersion: CURRENT_SCHEMA_VERSION,
       exportTimestamp: Date.now(),
-      appVersion: '1.0.0',
+      appVersion: '1.1.0',
       songs: state.songs,
-      setlists: state.setlists,
-      setlistEntries: state.setlistEntries,
+      currentSetlist: state.currentSetlist,
+      legacySetlists: state.legacySetlists,
+      legacySetlistEntries: state.legacySetlistEntries,
       preferences: {
         textSize: state.preferences.textSize,
         theme: state.preferences.theme,
@@ -693,33 +689,24 @@ export class DurableStore {
   }
 
   public async importBackup(backup: any, options: ImportOptions = {}): Promise<ImportResult> {
-    // 1. Strict validation of whole file before any mutation
     if (!backup || typeof backup !== 'object') {
       throw new Error('Invalid backup file: Root must be a JSON object');
     }
 
     const version = Number(backup.schemaVersion);
-    if (!version || version > CURRENT_SCHEMA_VERSION) {
-      throw new Error(`Unsupported schema version ${version}. Maximum supported is ${CURRENT_SCHEMA_VERSION}`);
+    if (!version || (version !== 1 && version !== CURRENT_SCHEMA_VERSION)) {
+      throw new Error(`Unsupported schema version ${version}. Supported versions are 1 and ${CURRENT_SCHEMA_VERSION}`);
     }
 
     if (!Array.isArray(backup.songs)) {
       throw new Error('Invalid backup: "songs" array is missing or invalid');
     }
-    if (!Array.isArray(backup.setlists)) {
-      throw new Error('Invalid backup: "setlists" array is missing or invalid');
-    }
-    if (!Array.isArray(backup.setlistEntries)) {
-      throw new Error('Invalid backup: "setlistEntries" array is missing or invalid');
-    }
 
     const errors: string[] = [];
     let addedSongsCount = 0;
     let skippedSongsCount = 0;
-    let addedSetlistsCount = 0;
-    let skippedSetlistsCount = 0;
-    let addedEntriesCount = 0;
-    let skippedEntriesCount = 0;
+    let importedSetlistCount = 0;
+    let skippedSetlistMessage: string | undefined;
     let purgedResurrectionsBlockedCount = 0;
 
     await this.queueWrite(async () => {
@@ -727,11 +714,6 @@ export class DurableStore {
       const localSongMap = new Map<string, Song>(state.songs.map(s => [s.id, s]));
       const purgedSet = new Set<string>(state.preferences.purgedSongIds || []);
 
-      // Validate & merge songs
-      // Requirement: Existing local songs win when an imported copy has different details.
-      // Requirement: Local deleted-song record wins over imported active copy with same ID (do not resurrect).
-      // Requirement: For an ID previously purged locally, retain minimal deletion identity metadata to prevent accidental resurrection from an old backup.
-      // Requirement: Append genuinely new imported songs after existing songs, preserving their order within the backup.
       const newSongsToAppend: Song[] = [];
 
       for (const rawSong of backup.songs) {
@@ -743,19 +725,17 @@ export class DurableStore {
         const songId = String(rawSong.id);
 
         if (purgedSet.has(songId)) {
-          // Block resurrection of locally purged songs!
           purgedResurrectionsBlockedCount++;
           skippedSongsCount++;
           continue;
         }
 
         if (localSongMap.has(songId)) {
-          // Existing local song wins! Skipped.
+          // Existing local song wins!
           skippedSongsCount++;
           continue;
         }
 
-        // New song to import
         const newSong: Song = {
           id: songId,
           title: String(rawSong.title).trim(),
@@ -769,7 +749,6 @@ export class DurableStore {
           deletedAt: rawSong.deletedAt != null ? Number(rawSong.deletedAt) : null,
         };
 
-        // If imported song is already older than 30 days and deleted, don't resurrect or add it
         if (newSong.deletedAt !== null && Date.now() - newSong.deletedAt >= THIRTY_DAYS_MS) {
           skippedSongsCount++;
           purgedSet.add(songId);
@@ -783,94 +762,44 @@ export class DurableStore {
 
       state.songs.push(...newSongsToAppend);
 
-      // Validate & merge setlists
-      // Requirement: Existing local setlists also win for the same stable identity; import genuinely new setlists.
-      const localSetlistMap = new Map<string, Setlist>(state.setlists.map(sl => [sl.id, sl]));
-      const newSetlistsToAppend: Setlist[] = [];
+      // Current Setlist Import Handling:
+      // Requirement: "A fresh library can restore the imported current setlist; an existing library keeps its own current setlist, including a deliberately cleared one. Explain any skipped imported list in the import summary."
+      if (state.currentSetlist.length === 0 && state.songs.length === addedSongsCount) {
+        // Fresh library! Can restore imported setlist
+        let candidateEntries: Array<{ id: string; songId: string }> = [];
 
-      for (const rawSl of backup.setlists) {
-        if (!rawSl.id || !rawSl.name || typeof rawSl.name !== 'string') {
-          skippedSetlistsCount++;
-          continue;
+        if (Array.isArray(backup.currentSetlist)) {
+          candidateEntries = backup.currentSetlist;
+        } else if (Array.isArray(backup.setlistEntries)) {
+          // v1 backup: take first active setlist entries if available
+          const activeSl = Array.isArray(backup.setlists) ? backup.setlists.find((sl: any) => !sl.archived) : null;
+          if (activeSl) {
+            candidateEntries = backup.setlistEntries.filter((e: any) => e.setlistId === activeSl.id);
+          } else {
+            candidateEntries = backup.setlistEntries;
+          }
         }
 
-        const setlistId = String(rawSl.id);
-        if (localSetlistMap.has(setlistId)) {
-          skippedSetlistsCount++;
-          continue;
+        const validEntries: CurrentSetlistEntry[] = [];
+        for (const rawEntry of candidateEntries) {
+          const song = localSongMap.get(String(rawEntry.songId));
+          if (song && song.deletedAt === null) {
+            validEntries.push({
+              id: String(rawEntry.id || generateId('entry')),
+              songId: song.id,
+              position: validEntries.length,
+            });
+          }
         }
 
-        const newSetlist: Setlist = {
-          id: setlistId,
-          name: String(rawSl.name).trim(),
-          date: String(rawSl.date || ''),
-          notes: typeof rawSl.notes === 'string' ? rawSl.notes : '',
-          archived: Boolean(rawSl.archived),
-          createdAt: Number(rawSl.createdAt) || Date.now(),
-          updatedAt: Number(rawSl.updatedAt) || Date.now(),
-        };
-
-        newSetlistsToAppend.push(newSetlist);
-        localSetlistMap.set(newSetlist.id, newSetlist);
-        addedSetlistsCount++;
+        state.currentSetlist = validEntries;
+        importedSetlistCount = validEntries.length;
+      } else {
+        // Existing library keeps its own current setlist!
+        skippedSetlistMessage = 'Kept existing local current setlist. Imported setlist entries were not overwritten.';
       }
 
-      state.setlists.push(...newSetlistsToAppend);
-
-      // Merge setlist entries
-      // Requirement: Never retain entries pointing to deleted, missing or expired songs. Validate or explicitly report skipped unavailable references.
-      // Requirement: Reimporting the same backup must not create duplicate setlist occurrences.
-      const existingEntryIds = new Set(state.setlistEntries.map(e => e.id));
-
-      for (const rawEntry of backup.setlistEntries) {
-        if (!rawEntry.id || !rawEntry.setlistId || !rawEntry.songId) {
-          skippedEntriesCount++;
-          continue;
-        }
-
-        const entryId = String(rawEntry.id);
-        if (existingEntryIds.has(entryId)) {
-          skippedEntriesCount++;
-          continue;
-        }
-
-        const song = localSongMap.get(String(rawEntry.songId));
-        if (!song || song.deletedAt !== null) {
-          // Target song is missing, deleted, or expired!
-          skippedEntriesCount++;
-          continue;
-        }
-
-        const setlist = localSetlistMap.get(String(rawEntry.setlistId));
-        if (!setlist) {
-          // Target setlist missing
-          skippedEntriesCount++;
-          continue;
-        }
-
-        const newEntry: SetlistEntry = {
-          id: entryId,
-          setlistId: setlist.id,
-          songId: song.id,
-          position: typeof rawEntry.position === 'number' ? rawEntry.position : state.setlistEntries.filter(e => e.setlistId === setlist.id).length,
-        };
-
-        state.setlistEntries.push(newEntry);
-        existingEntryIds.add(entryId);
-        addedEntriesCount++;
-      }
-
-      // Re-index entries per setlist to guarantee valid consecutive positions
-      for (const sl of state.setlists) {
-        const entries = state.setlistEntries
-          .filter(e => e.setlistId === sl.id)
-          .sort((a, b) => a.position - b.position);
-        entries.forEach((e, idx) => {
-          e.position = idx;
-        });
-      }
-
-      // Explicit appearance / text-size option
+      // Explicit appearance preference import option
       if (options.importPreferences && backup.preferences) {
         if (['small', 'standard', 'large', 'x-large'].includes(backup.preferences.textSize)) {
           state.preferences.textSize = backup.preferences.textSize;
@@ -889,10 +818,8 @@ export class DurableStore {
       success: true,
       addedSongsCount,
       skippedSongsCount,
-      addedSetlistsCount,
-      skippedSetlistsCount,
-      addedEntriesCount,
-      skippedEntriesCount,
+      importedSetlistCount,
+      skippedSetlistMessage,
       purgedResurrectionsBlockedCount,
       errors: errors.length > 0 ? errors : undefined,
     };

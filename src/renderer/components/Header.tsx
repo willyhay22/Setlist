@@ -1,25 +1,55 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useStore } from '../hooks/useStore';
-import { HomeIcon, MusicIcon, ListIcon, SearchIcon, PlusIcon, SettingsIcon, CloseIcon } from './Icons';
+import { HomeIcon, MusicIcon, ListIcon, SearchIcon, PlusIcon, SettingsIcon, CloseIcon, CheckIcon } from './Icons';
+import { searchSongs } from '../../shared/search';
+import { formatDisplayTitle, formatDisplayArtist } from '../../shared/formatters';
 
 export const Header: React.FC = () => {
   const {
+    state,
     activeTab,
     setActiveTab,
     searchQuery,
     setSearchQuery,
+    setSelectedSongId,
+    addSongToCurrentSetlist,
     openSongModal,
     setIsSettingsOpen,
-    searchDetour,
+    searchDetourEntryId,
     returnFromDetour,
+    selectedSetlistEntryId,
+    setSearchDetourEntryId,
   } = useStore();
 
-  const searchInputRef = useRef<HTMLInputElement>(null);
+  const [isPopoverOpen, setIsPopoverOpen] = useState(false);
+  const [focusedIndex, setFocusedIndex] = useState<number>(-1);
+  const [addedSongId, setAddedSongId] = useState<string | null>(null);
 
-  // Global shortcuts (Cmd+F, Cmd+N)
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  const allSongs = state?.songs || [];
+  const searchResults = searchSongs(allSongs, searchQuery);
+
+  // Close popover when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        popoverRef.current &&
+        !popoverRef.current.contains(e.target as Node) &&
+        searchInputRef.current &&
+        !searchInputRef.current.contains(e.target as Node)
+      ) {
+        setIsPopoverOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Global shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't hijack if user is typing in a textarea or input unless pressing Cmd+F
       const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
       const isCmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
 
@@ -27,8 +57,10 @@ export const Header: React.FC = () => {
         e.preventDefault();
         searchInputRef.current?.focus();
         searchInputRef.current?.select();
+        if (activeTab !== 'library' && searchQuery.trim()) {
+          setIsPopoverOpen(true);
+        }
       } else if (isCmdOrCtrl && e.key.toLowerCase() === 'n' && !e.shiftKey) {
-        // Only trigger Cmd+N if not inside an active text input
         const target = e.target as HTMLElement;
         const isEditingText = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
         if (!isEditingText) {
@@ -40,19 +72,73 @@ export const Header: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [openSongModal]);
+  }, [openSongModal, activeTab, searchQuery]);
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const q = e.target.value;
     setSearchQuery(q);
-    if (q.trim() && activeTab !== 'library') {
-      // Global search switches to library view
-      setActiveTab('library');
+    setFocusedIndex(-1);
+
+    if (activeTab !== 'library') {
+      // On Home or Setlist, show anchored results popover without switching tabs!
+      setIsPopoverOpen(Boolean(q.trim()));
+    }
+  };
+
+  const handleSearchFocus = () => {
+    if (activeTab !== 'library' && searchQuery.trim()) {
+      setIsPopoverOpen(true);
+    }
+  };
+
+  const handleSelectSong = (songId: string) => {
+    if (activeTab === 'setlist') {
+      // Record detour context so "Back to Setlist" restores exact prior place
+      setSearchDetourEntryId(selectedSetlistEntryId);
+    }
+    setSelectedSongId(songId);
+    setActiveTab('library');
+    setIsPopoverOpen(false);
+  };
+
+  const handleAddSongToSetlist = async (e: React.MouseEvent, songId: string) => {
+    e.stopPropagation();
+    await addSongToCurrentSetlist(songId);
+    setAddedSongId(songId);
+    setTimeout(() => {
+      setAddedSongId(null);
+    }, 1200);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      setIsPopoverOpen(false);
+      searchInputRef.current?.blur();
+      return;
+    }
+
+    if (activeTab === 'library' || !isPopoverOpen || searchResults.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setFocusedIndex((prev) => (prev < searchResults.length - 1 ? prev + 1 : 0));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setFocusedIndex((prev) => (prev > 0 ? prev - 1 : searchResults.length - 1));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (focusedIndex >= 0 && focusedIndex < searchResults.length) {
+        handleSelectSong(searchResults[focusedIndex].song.id);
+      } else if (searchResults.length > 0) {
+        handleSelectSong(searchResults[0].song.id);
+      }
     }
   };
 
   const clearSearch = () => {
     setSearchQuery('');
+    setIsPopoverOpen(false);
     searchInputRef.current?.focus();
   };
 
@@ -65,7 +151,10 @@ export const Header: React.FC = () => {
           id="tab-home"
           aria-selected={activeTab === 'home'}
           className={`nav-tab-btn ${activeTab === 'home' ? 'active' : ''}`}
-          onClick={() => setActiveTab('home')}
+          onClick={() => {
+            setIsPopoverOpen(false);
+            setActiveTab('home');
+          }}
         >
           <HomeIcon size={14} />
           <span>Home</span>
@@ -76,7 +165,10 @@ export const Header: React.FC = () => {
           id="tab-library"
           aria-selected={activeTab === 'library'}
           className={`nav-tab-btn ${activeTab === 'library' ? 'active' : ''}`}
-          onClick={() => setActiveTab('library')}
+          onClick={() => {
+            setIsPopoverOpen(false);
+            setActiveTab('library');
+          }}
         >
           <MusicIcon size={14} />
           <span>Library</span>
@@ -84,26 +176,32 @@ export const Header: React.FC = () => {
 
         <button
           role="tab"
-          id="tab-setlists"
-          aria-selected={activeTab === 'setlists'}
-          className={`nav-tab-btn ${activeTab === 'setlists' ? 'active' : ''}`}
-          onClick={() => setActiveTab('setlists')}
+          id="tab-setlist"
+          aria-selected={activeTab === 'setlist'}
+          className={`nav-tab-btn ${activeTab === 'setlist' ? 'active' : ''}`}
+          onClick={() => {
+            setIsPopoverOpen(false);
+            setActiveTab('setlist');
+          }}
         >
           <ListIcon size={14} />
-          <span>Setlists</span>
+          <span>Setlist</span>
         </button>
       </nav>
 
-      {/* Global Search Input */}
-      <div className="header-search" id="tour-search-container">
+      {/* Global Search Input with Anchored Popover */}
+      <div className="header-search" id="tour-search-container" style={{ position: 'relative' }}>
         <SearchIcon size={14} className="search-icon" />
         <input
           ref={searchInputRef}
           type="search"
-          placeholder="Search library by title or artist (⌘F)"
+          placeholder="Search library (⌘F)"
           value={searchQuery}
           onChange={handleSearchChange}
+          onFocus={handleSearchFocus}
+          onKeyDown={handleKeyDown}
           aria-label="Search active songs by title or artist"
+          aria-expanded={isPopoverOpen}
         />
         {searchQuery && (
           <button
@@ -115,11 +213,69 @@ export const Header: React.FC = () => {
             <CloseIcon size={12} />
           </button>
         )}
+
+        {/* Anchored Suggestions Popover (Active on Home or Setlist) */}
+        {isPopoverOpen && activeTab !== 'library' && (
+          <div className="search-popover" ref={popoverRef} role="listbox">
+            {searchResults.length === 0 ? (
+              <div style={{ padding: '12px 14px', fontSize: '12.5px', color: 'var(--text-muted)', textAlign: 'center' }}>
+                No songs found
+              </div>
+            ) : (
+              searchResults.map(({ song, isFuzzy }, idx) => {
+                const isFocused = idx === focusedIndex;
+                const isJustAdded = addedSongId === song.id;
+                const displayTitle = formatDisplayTitle(song.title);
+                const displayArtist = formatDisplayArtist(song.artist);
+
+                return (
+                  <div
+                    key={song.id}
+                    className={`search-popover-item ${isFocused ? 'focused' : ''}`}
+                    onClick={() => handleSelectSong(song.id)}
+                    role="option"
+                    aria-selected={isFocused}
+                  >
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {displayTitle}
+                        {isFuzzy && <span className="fuzzy-tag">Close match</span>}
+                      </div>
+                      {displayArtist ? (
+                        <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {displayArtist}
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <button
+                      className="btn"
+                      style={{
+                        height: '24px',
+                        padding: '0 8px',
+                        fontSize: '11px',
+                        flexShrink: 0,
+                        background: isJustAdded ? 'var(--success-bg)' : undefined,
+                        color: isJustAdded ? 'var(--success-color)' : undefined,
+                        borderColor: isJustAdded ? 'var(--success-color)' : undefined,
+                      }}
+                      onClick={(e) => handleAddSongToSetlist(e, song.id)}
+                      title="Add to current setlist without switching pages"
+                    >
+                      {isJustAdded ? <CheckIcon size={11} /> : <PlusIcon size={11} />}
+                      <span>{isJustAdded ? 'Added' : 'Add to Setlist'}</span>
+                    </button>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
       </div>
 
       {/* Action Buttons */}
       <div className="header-actions">
-        {searchDetour && (
+        {searchDetourEntryId && activeTab === 'library' && (
           <button
             className="btn btn-primary"
             onClick={returnFromDetour}
@@ -144,8 +300,8 @@ export const Header: React.FC = () => {
           id="tour-settings-btn"
           className="btn btn-icon"
           onClick={() => setIsSettingsOpen(true)}
-          title="Settings, Help & Backups"
-          aria-label="Open Settings and Help"
+          title="Settings & Help (⌘,)"
+          aria-label="Open Settings"
         >
           <SettingsIcon size={15} />
         </button>

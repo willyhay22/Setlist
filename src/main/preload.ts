@@ -2,12 +2,11 @@ import { contextBridge, ipcRenderer } from 'electron';
 import {
   AppData,
   Song,
-  Setlist,
-  SetlistEntry,
+  CurrentSetlistEntry,
   AppPreferences,
   ImportResult,
   SongInput,
-  SetlistInput,
+  TextSize,
 } from '../shared/types';
 
 export interface ElectronAPI {
@@ -18,17 +17,19 @@ export interface ElectronAPI {
   duplicateSong: (songId: string) => Promise<Song>;
   deleteSong: (songId: string) => Promise<void>;
   restoreSong: (songId: string) => Promise<Song>;
-  createSetlist: (input: SetlistInput) => Promise<Setlist>;
-  updateSetlist: (setlistId: string, input: SetlistInput) => Promise<Setlist>;
-  setSetlistArchived: (setlistId: string, archived: boolean) => Promise<Setlist>;
-  addSongToSetlist: (setlistId: string, songId: string) => Promise<SetlistEntry>;
-  addMultipleSongsToSetlist: (setlistId: string, songIds: string[]) => Promise<SetlistEntry[]>;
-  reorderSetlistEntries: (setlistId: string, orderedEntryIds: string[]) => Promise<void>;
-  removeSetlistEntry: (entryId: string) => Promise<{ removedEntry: SetlistEntry; formerPosition: number }>;
-  restoreSetlistEntry: (entry: SetlistEntry, targetPosition: number) => Promise<void>;
+
+  // Current Setlist
+  addSongToCurrentSetlist: (songId: string) => Promise<CurrentSetlistEntry>;
+  addMultipleSongsToCurrentSetlist: (songIds: string[]) => Promise<CurrentSetlistEntry[]>;
+  reorderCurrentSetlist: (orderedEntryIds: string[]) => Promise<void>;
+  removeCurrentSetlistEntry: (entryId: string) => Promise<{ removedEntry: CurrentSetlistEntry; formerPosition: number }>;
+  restoreCurrentSetlistEntry: (entry: CurrentSetlistEntry, targetPosition: number) => Promise<void>;
+  clearCurrentSetlist: () => Promise<{ formerEntries: CurrentSetlistEntry[] }>;
+  restoreClearedSetlist: (entries: CurrentSetlistEntry[]) => Promise<void>;
+  chooseMigrationSetlist: (legacySetlistId: string) => Promise<void>;
+
   updatePreferences: (prefs: Partial<AppPreferences>) => Promise<AppPreferences>;
   touchRecentSong: (songId: string) => Promise<void>;
-  touchRecentSetlist: (setlistId: string) => Promise<void>;
   exportBackup: () => Promise<{ cancelled: boolean; filePath?: string; error?: string }>;
   importBackup: (options: { importPreferences?: boolean }) => Promise<{ cancelled: boolean; result?: ImportResult; error?: string }>;
   getSystemTheme: () => Promise<'dark' | 'light'>;
@@ -36,6 +37,9 @@ export interface ElectronAPI {
   onRequestClose: (callback: () => void) => () => void;
   respondCanClose: (canClose: boolean) => void;
   flushPendingSaves: () => Promise<void>;
+
+  // Native application menu command triggers
+  onMenuAction: (callback: (action: string, payload?: any) => void) => () => void;
 }
 
 const api: ElectronAPI = {
@@ -46,17 +50,18 @@ const api: ElectronAPI = {
   duplicateSong: (songId) => ipcRenderer.invoke('store:duplicateSong', songId),
   deleteSong: (songId) => ipcRenderer.invoke('store:deleteSong', songId),
   restoreSong: (songId) => ipcRenderer.invoke('store:restoreSong', songId),
-  createSetlist: (input) => ipcRenderer.invoke('store:createSetlist', input),
-  updateSetlist: (setlistId, input) => ipcRenderer.invoke('store:updateSetlist', setlistId, input),
-  setSetlistArchived: (setlistId, archived) => ipcRenderer.invoke('store:setSetlistArchived', setlistId, archived),
-  addSongToSetlist: (setlistId, songId) => ipcRenderer.invoke('store:addSongToSetlist', setlistId, songId),
-  addMultipleSongsToSetlist: (setlistId, songIds) => ipcRenderer.invoke('store:addMultipleSongsToSetlist', setlistId, songIds),
-  reorderSetlistEntries: (setlistId, orderedEntryIds) => ipcRenderer.invoke('store:reorderSetlistEntries', setlistId, orderedEntryIds),
-  removeSetlistEntry: (entryId) => ipcRenderer.invoke('store:removeSetlistEntry', entryId),
-  restoreSetlistEntry: (entry, targetPosition) => ipcRenderer.invoke('store:restoreSetlistEntry', entry, targetPosition),
+
+  addSongToCurrentSetlist: (songId) => ipcRenderer.invoke('store:addSongToCurrentSetlist', songId),
+  addMultipleSongsToCurrentSetlist: (songIds) => ipcRenderer.invoke('store:addMultipleSongsToCurrentSetlist', songIds),
+  reorderCurrentSetlist: (orderedEntryIds) => ipcRenderer.invoke('store:reorderCurrentSetlist', orderedEntryIds),
+  removeCurrentSetlistEntry: (entryId) => ipcRenderer.invoke('store:removeCurrentSetlistEntry', entryId),
+  restoreCurrentSetlistEntry: (entry, targetPosition) => ipcRenderer.invoke('store:restoreCurrentSetlistEntry', entry, targetPosition),
+  clearCurrentSetlist: () => ipcRenderer.invoke('store:clearCurrentSetlist'),
+  restoreClearedSetlist: (entries) => ipcRenderer.invoke('store:restoreClearedSetlist', entries),
+  chooseMigrationSetlist: (legacySetlistId) => ipcRenderer.invoke('store:chooseMigrationSetlist', legacySetlistId),
+
   updatePreferences: (prefs) => ipcRenderer.invoke('store:updatePreferences', prefs),
   touchRecentSong: (songId) => ipcRenderer.invoke('store:touchRecentSong', songId),
-  touchRecentSetlist: (setlistId) => ipcRenderer.invoke('store:touchRecentSetlist', setlistId),
   exportBackup: () => ipcRenderer.invoke('dialog:exportBackup'),
   importBackup: (options) => ipcRenderer.invoke('dialog:importBackup', options),
   getSystemTheme: () => ipcRenderer.invoke('theme:getSystem'),
@@ -72,6 +77,12 @@ const api: ElectronAPI = {
   },
   respondCanClose: (canClose) => ipcRenderer.send('app:respond-close', canClose),
   flushPendingSaves: () => ipcRenderer.invoke('store:flush'),
+
+  onMenuAction: (callback) => {
+    const handler = (_: any, action: string, payload?: any) => callback(action, payload);
+    ipcRenderer.on('menu:action', handler);
+    return () => ipcRenderer.removeListener('menu:action', handler);
+  },
 };
 
 contextBridge.exposeInMainWorld('api', api);

@@ -2,14 +2,11 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import {
   AppData,
   Song,
-  Setlist,
-  SetlistEntry,
+  CurrentSetlistEntry,
   AppPreferences,
   ImportResult,
   SongInput,
-  SetlistInput,
   TextSize,
-  ThemePreference,
 } from '../../shared/types';
 import { ElectronAPI } from '../../main/preload';
 
@@ -17,11 +14,6 @@ declare global {
   interface Window {
     api: ElectronAPI;
   }
-}
-
-interface DetourContext {
-  setlistId: string;
-  entryId: string;
 }
 
 interface UndoToastState {
@@ -33,33 +25,28 @@ interface UndoToastState {
 interface StoreContextType {
   state: AppData | null;
   loading: boolean;
-  activeTab: 'home' | 'library' | 'setlists';
-  setActiveTab: (tab: 'home' | 'library' | 'setlists') => void;
+  activeTab: 'home' | 'library' | 'setlist';
+  setActiveTab: (tab: 'home' | 'library' | 'setlist') => void;
   selectedSongId: string | null;
   setSelectedSongId: (id: string | null) => void;
-  selectedSetlistId: string | null;
-  setSelectedSetlistId: (id: string | null) => void;
-  selectedEntryId: string | null;
-  setSelectedEntryId: (id: string | null) => void;
+  selectedSetlistEntryId: string | null;
+  setSelectedSetlistEntryId: (id: string | null) => void;
   searchQuery: string;
   setSearchQuery: (q: string) => void;
-  searchDetour: DetourContext | null;
-  setSearchDetour: (ctx: DetourContext | null) => void;
+  searchDetourEntryId: string | null;
+  setSearchDetourEntryId: (id: string | null) => void;
   returnFromDetour: () => void;
   undoToast: UndoToastState | null;
   clearUndoToast: () => void;
 
-  // Modals
+  // Modals & Panels
   songModal: { isOpen: boolean; mode: 'create' | 'edit' | 'duplicate'; song?: Song } | null;
   openSongModal: (mode: 'create' | 'edit' | 'duplicate', song?: Song) => void;
   closeSongModal: () => void;
-  isSetlistModalOpen: boolean;
-  editingSetlist: Setlist | null;
-  openNewSetlistModal: () => void;
-  openEditSetlistModal: (setlist: Setlist) => void;
-  closeSetlistModal: () => void;
   isSettingsOpen: boolean;
   setIsSettingsOpen: (open: boolean) => void;
+  settingsInitialTab: 'appearance' | 'library' | 'help';
+  setSettingsInitialTab: (tab: 'appearance' | 'library' | 'help') => void;
   isRecentlyDeletedOpen: boolean;
   setIsRecentlyDeletedOpen: (open: boolean) => void;
   isTourOpen: boolean;
@@ -74,13 +61,16 @@ interface StoreContextType {
   duplicateSong: (songId: string) => Promise<Song>;
   deleteSong: (songId: string) => Promise<void>;
   restoreSong: (songId: string) => Promise<Song>;
-  createSetlist: (input: SetlistInput) => Promise<Setlist>;
-  updateSetlist: (setlistId: string, input: SetlistInput) => Promise<Setlist>;
-  setSetlistArchived: (setlistId: string, archived: boolean) => Promise<Setlist>;
-  addSongToSetlist: (setlistId: string, songId: string) => Promise<SetlistEntry>;
-  addMultipleSongsToSetlist: (setlistId: string, songIds: string[]) => Promise<SetlistEntry[]>;
-  reorderSetlistEntries: (setlistId: string, orderedEntryIds: string[]) => Promise<void>;
-  removeSetlistEntry: (entryId: string) => Promise<void>;
+
+  // Current Setlist Operations
+  addSongToCurrentSetlist: (songId: string) => Promise<CurrentSetlistEntry>;
+  addMultipleSongsToCurrentSetlist: (songIds: string[]) => Promise<CurrentSetlistEntry[]>;
+  reorderCurrentSetlist: (orderedEntryIds: string[]) => Promise<void>;
+  removeCurrentSetlistEntry: (entryId: string) => Promise<void>;
+  clearCurrentSetlist: () => Promise<void>;
+  prevSetlistSong: () => void;
+  nextSetlistSong: () => void;
+
   updatePreferences: (prefs: Partial<AppPreferences>) => Promise<AppPreferences>;
   exportBackup: () => Promise<{ cancelled: boolean; filePath?: string; error?: string }>;
   importBackup: (options: { importPreferences?: boolean }) => Promise<{ cancelled: boolean; result?: ImportResult; error?: string }>;
@@ -91,18 +81,16 @@ const StoreContext = createContext<StoreContextType | null>(null);
 export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, setState] = useState<AppData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'home' | 'library' | 'setlists'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'library' | 'setlist'>('home');
   const [selectedSongId, setSelectedSongId] = useState<string | null>(null);
-  const [selectedSetlistId, setSelectedSetlistId] = useState<string | null>(null);
-  const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
+  const [selectedSetlistEntryId, setSelectedSetlistEntryId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchDetour, setSearchDetour] = useState<DetourContext | null>(null);
+  const [searchDetourEntryId, setSearchDetourEntryId] = useState<string | null>(null);
   const [undoToast, setUndoToast] = useState<UndoToastState | null>(null);
 
   const [songModal, setSongModal] = useState<{ isOpen: boolean; mode: 'create' | 'edit' | 'duplicate'; song?: Song } | null>(null);
-  const [isSetlistModalOpen, setIsSetlistModalOpen] = useState(false);
-  const [editingSetlist, setEditingSetlist] = useState<Setlist | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [settingsInitialTab, setSettingsInitialTab] = useState<'appearance' | 'library' | 'help'>('appearance');
   const [isRecentlyDeletedOpen, setIsRecentlyDeletedOpen] = useState(false);
   const [isTourOpen, setIsTourOpen] = useState(false);
 
@@ -129,7 +117,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             setState(initial);
             setLoading(false);
 
-            // First run tour
+            // First run tour only if tour not previously completed
             if (!initial.preferences.hasCompletedTour) {
               setIsTourOpen(true);
             }
@@ -145,14 +133,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
   }, []);
 
-  // Apply theme & text size to document body
+  // Theme & text size
   useEffect(() => {
     if (!state) return;
-
-    // Apply text size
     document.body.setAttribute('data-text-size', state.preferences.textSize || 'standard');
 
-    // Apply theme
     const themePref = state.preferences.theme || 'system';
     if (themePref === 'system') {
       window.api?.getSystemTheme().then((sysTheme) => {
@@ -163,7 +148,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [state?.preferences.textSize, state?.preferences.theme]);
 
-  // Listen to OS theme changes
+  // System theme changes
   useEffect(() => {
     if (!window.api?.onSystemThemeChanged) return;
     const unsubscribe = window.api.onSystemThemeChanged((newTheme) => {
@@ -174,17 +159,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return unsubscribe;
   }, [state?.preferences.theme]);
 
-  // Handle window close confirmation & save flush
+  // Safe window close confirmation
   useEffect(() => {
     if (!window.api?.onRequestClose) return;
     const unsubscribe = window.api.onRequestClose(async () => {
-      // Check if dirty form is open
       if (songModal?.isOpen) {
         const confirmClose = window.confirm('You have an unsaved song form. Discard changes and quit?');
         window.api.respondCanClose(confirmClose);
         return;
       }
-      // Flush pending note saves and close safely
       try {
         await window.api.flushPendingSaves();
         window.api.respondCanClose(true);
@@ -196,7 +179,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return unsubscribe;
   }, [songModal]);
 
-  // Undo toast expiration
   const clearUndoToast = useCallback(() => {
     if (toastTimerRef.current) {
       clearTimeout(toastTimerRef.current);
@@ -272,76 +254,93 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return restored;
   }, [refreshState]);
 
-  // Setlist operations
-  const createSetlist = useCallback(async (input: SetlistInput) => {
-    const sl = await window.api.createSetlist(input);
+  // Current Setlist operations
+  const addSongToCurrentSetlist = useCallback(async (songId: string) => {
+    const entry = await window.api.addSongToCurrentSetlist(songId);
     await refreshState();
-    setSelectedSetlistId(sl.id);
-    setActiveTab('setlists');
-    return sl;
-  }, [refreshState]);
-
-  const updateSetlist = useCallback(async (setlistId: string, input: SetlistInput) => {
-    const updated = await window.api.updateSetlist(setlistId, input);
-    await refreshState();
-    return updated;
-  }, [refreshState]);
-
-  const setSetlistArchived = useCallback(async (setlistId: string, archived: boolean) => {
-    const updated = await window.api.setSetlistArchived(setlistId, archived);
-    await refreshState();
-    return updated;
-  }, [refreshState]);
-
-  const addSongToSetlist = useCallback(async (setlistId: string, songId: string) => {
-    const entry = await window.api.addSongToSetlist(setlistId, songId);
-    await refreshState();
-    setSelectedEntryId(entry.id);
+    setSelectedSetlistEntryId(entry.id);
     return entry;
   }, [refreshState]);
 
-  const addMultipleSongsToSetlist = useCallback(async (setlistId: string, songIds: string[]) => {
-    const entries = await window.api.addMultipleSongsToSetlist(setlistId, songIds);
+  const addMultipleSongsToCurrentSetlist = useCallback(async (songIds: string[]) => {
+    const entries = await window.api.addMultipleSongsToCurrentSetlist(songIds);
     await refreshState();
+    if (entries.length > 0) {
+      setSelectedSetlistEntryId(entries[entries.length - 1].id);
+    }
     return entries;
   }, [refreshState]);
 
-  const reorderSetlistEntries = useCallback(async (setlistId: string, orderedEntryIds: string[]) => {
-    // Optimistic local update
+  const reorderCurrentSetlist = useCallback(async (orderedEntryIds: string[]) => {
     setState((prev) => {
       if (!prev) return prev;
-      const updatedEntries = [...prev.setlistEntries];
+      const entryMap = new Map(prev.currentSetlist.map(e => [e.id, e]));
+      const reordered: CurrentSetlistEntry[] = [];
       orderedEntryIds.forEach((id, idx) => {
-        const found = updatedEntries.find((e) => e.id === id && e.setlistId === setlistId);
-        if (found) found.position = idx;
+        const found = entryMap.get(id);
+        if (found) {
+          reordered.push({ ...found, position: idx });
+        }
       });
-      return { ...prev, setlistEntries: updatedEntries };
+      return { ...prev, currentSetlist: reordered };
     });
-    await window.api.reorderSetlistEntries(setlistId, orderedEntryIds);
+    await window.api.reorderCurrentSetlist(orderedEntryIds);
     await refreshState();
   }, [refreshState]);
 
-  const removeSetlistEntry = useCallback(async (entryId: string) => {
-    const { removedEntry, formerPosition } = await window.api.removeSetlistEntry(entryId);
+  const removeCurrentSetlistEntry = useCallback(async (entryId: string) => {
+    const { removedEntry, formerPosition } = await window.api.removeCurrentSetlistEntry(entryId);
     await refreshState();
 
     triggerUndoToast('Removed from setlist', async () => {
-      await window.api.restoreSetlistEntry(removedEntry, formerPosition);
+      await window.api.restoreCurrentSetlistEntry(removedEntry, formerPosition);
       await refreshState();
-      setSelectedEntryId(removedEntry.id);
+      setSelectedSetlistEntryId(removedEntry.id);
     });
   }, [refreshState, triggerUndoToast]);
 
-  const returnFromDetour = useCallback(() => {
-    if (!searchDetour) return;
-    setActiveTab('setlists');
-    setSelectedSetlistId(searchDetour.setlistId);
-    setSelectedEntryId(searchDetour.entryId);
-    setSearchDetour(null);
-    setSearchQuery('');
-  }, [searchDetour]);
+  const clearCurrentSetlist = useCallback(async () => {
+    if (!state || state.currentSetlist.length === 0) return;
+    const confirmClear = window.confirm('Clear the current setlist? Your songs will stay in the library.');
+    if (!confirmClear) return;
 
-  // Preferences & backups
+    const { formerEntries } = await window.api.clearCurrentSetlist();
+    await refreshState();
+    setSelectedSetlistEntryId(null);
+
+    triggerUndoToast('Setlist cleared', async () => {
+      await window.api.restoreClearedSetlist(formerEntries);
+      await refreshState();
+    });
+  }, [state, refreshState, triggerUndoToast]);
+
+  const prevSetlistSong = useCallback(() => {
+    if (!state || state.currentSetlist.length === 0) return;
+    const entries = [...state.currentSetlist].sort((a, b) => a.position - b.position);
+    const currentIndex = entries.findIndex(e => e.id === selectedSetlistEntryId);
+    if (currentIndex > 0) {
+      setSelectedSetlistEntryId(entries[currentIndex - 1].id);
+    }
+  }, [state, selectedSetlistEntryId]);
+
+  const nextSetlistSong = useCallback(() => {
+    if (!state || state.currentSetlist.length === 0) return;
+    const entries = [...state.currentSetlist].sort((a, b) => a.position - b.position);
+    const currentIndex = entries.findIndex(e => e.id === selectedSetlistEntryId);
+    if (currentIndex >= 0 && currentIndex < entries.length - 1) {
+      setSelectedSetlistEntryId(entries[currentIndex + 1].id);
+    }
+  }, [state, selectedSetlistEntryId]);
+
+  const returnFromDetour = useCallback(() => {
+    setActiveTab('setlist');
+    if (searchDetourEntryId) {
+      setSelectedSetlistEntryId(searchDetourEntryId);
+    }
+    setSearchDetourEntryId(null);
+    setSearchQuery('');
+  }, [searchDetourEntryId]);
+
   const updatePreferences = useCallback(async (prefs: Partial<AppPreferences>) => {
     const res = await window.api.updatePreferences(prefs);
     await refreshState();
@@ -373,20 +372,96 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setSongModal(null);
   }, []);
 
-  const openNewSetlistModal = useCallback(() => {
-    setEditingSetlist(null);
-    setIsSetlistModalOpen(true);
-  }, []);
-
-  const openEditSetlistModal = useCallback((setlist: Setlist) => {
-    setEditingSetlist(setlist);
-    setIsSetlistModalOpen(true);
-  }, []);
-
-  const closeSetlistModal = useCallback(() => {
-    setEditingSetlist(null);
-    setIsSetlistModalOpen(false);
-  }, []);
+  // Listen to native macOS menu triggers
+  useEffect(() => {
+    if (!window.api?.onMenuAction) return;
+    const unsubscribe = window.api.onMenuAction((action, payload) => {
+      switch (action) {
+        case 'new-song':
+          if (!songModal?.isOpen) {
+            openSongModal('create');
+          }
+          break;
+        case 'open-settings':
+          setSettingsInitialTab('appearance');
+          setIsSettingsOpen(true);
+          break;
+        case 'open-shortcuts':
+          setSettingsInitialTab('help');
+          setIsSettingsOpen(true);
+          break;
+        case 'open-help':
+          setSettingsInitialTab('help');
+          setIsSettingsOpen(true);
+          break;
+        case 'replay-tour':
+          setIsSettingsOpen(false);
+          setIsTourOpen(true);
+          break;
+        case 'close-window-or-modal':
+          if (songModal?.isOpen) {
+            closeSongModal();
+          } else if (isSettingsOpen) {
+            setIsSettingsOpen(false);
+          } else if (isRecentlyDeletedOpen) {
+            setIsRecentlyDeletedOpen(false);
+          } else {
+            // Close window -> triggers quit
+            window.api?.flushPendingSaves().then(() => window.api.respondCanClose(true));
+          }
+          break;
+        case 'nav-home':
+          setActiveTab('home');
+          break;
+        case 'nav-library':
+          setActiveTab('library');
+          break;
+        case 'nav-setlist':
+          setActiveTab('setlist');
+          break;
+        case 'set-text-size':
+          if (payload) {
+            updatePreferences({ textSize: payload as TextSize });
+          }
+          break;
+        case 'add-selected-to-setlist':
+          if (selectedSongId) {
+            addSongToCurrentSetlist(selectedSongId);
+          }
+          break;
+        case 'prev-song':
+          prevSetlistSong();
+          break;
+        case 'next-song':
+          nextSetlistSong();
+          break;
+        case 'clear-setlist':
+          clearCurrentSetlist();
+          break;
+        case 'trigger-export':
+          exportBackup();
+          break;
+        case 'trigger-import':
+          setSettingsInitialTab('library');
+          setIsSettingsOpen(true);
+          break;
+      }
+    });
+    return unsubscribe;
+  }, [
+    songModal,
+    isSettingsOpen,
+    isRecentlyDeletedOpen,
+    openSongModal,
+    closeSongModal,
+    selectedSongId,
+    addSongToCurrentSetlist,
+    prevSetlistSong,
+    nextSetlistSong,
+    clearCurrentSetlist,
+    exportBackup,
+    updatePreferences,
+  ]);
 
   return (
     <StoreContext.Provider
@@ -397,27 +472,22 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setActiveTab,
         selectedSongId,
         setSelectedSongId,
-        selectedSetlistId,
-        setSelectedSetlistId,
-        selectedEntryId,
-        setSelectedEntryId,
+        selectedSetlistEntryId,
+        setSelectedSetlistEntryId,
         searchQuery,
         setSearchQuery,
-        searchDetour,
-        setSearchDetour,
+        searchDetourEntryId,
+        setSearchDetourEntryId,
         returnFromDetour,
         undoToast,
         clearUndoToast,
         songModal,
         openSongModal,
         closeSongModal,
-        isSetlistModalOpen,
-        editingSetlist,
-        openNewSetlistModal,
-        openEditSetlistModal,
-        closeSetlistModal,
         isSettingsOpen,
         setIsSettingsOpen,
+        settingsInitialTab,
+        setSettingsInitialTab,
         isRecentlyDeletedOpen,
         setIsRecentlyDeletedOpen,
         isTourOpen,
@@ -430,13 +500,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         duplicateSong,
         deleteSong,
         restoreSong,
-        createSetlist,
-        updateSetlist,
-        setSetlistArchived,
-        addSongToSetlist,
-        addMultipleSongsToSetlist,
-        reorderSetlistEntries,
-        removeSetlistEntry,
+        addSongToCurrentSetlist,
+        addMultipleSongsToCurrentSetlist,
+        reorderCurrentSetlist,
+        removeCurrentSetlistEntry,
+        clearCurrentSetlist,
+        prevSetlistSong,
+        nextSetlistSong,
         updatePreferences,
         exportBackup,
         importBackup,

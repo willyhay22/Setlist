@@ -1,16 +1,15 @@
 import React, { useState } from 'react';
-import { Song } from '../../shared/types';
 import { useStore } from '../hooks/useStore';
 import { searchSongs } from '../../shared/search';
+import { formatDisplayTitle, formatDisplayArtist } from '../../shared/formatters';
 import { SearchIcon, CloseIcon, CheckIcon } from './Icons';
 
 interface SongPickerModalProps {
-  setlistId: string;
   onClose: () => void;
 }
 
-export const SongPickerModal: React.FC<SongPickerModalProps> = ({ setlistId, onClose }) => {
-  const { state, addMultipleSongsToSetlist } = useStore();
+export const SongPickerModal: React.FC<SongPickerModalProps> = ({ onClose }) => {
+  const { state, addMultipleSongsToCurrentSetlist } = useStore();
   const [search, setSearch] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
@@ -27,7 +26,7 @@ export const SongPickerModal: React.FC<SongPickerModalProps> = ({ setlistId, onC
 
   const handleAdd = async () => {
     if (selectedIds.length === 0) return;
-    await addMultipleSongsToSetlist(setlistId, selectedIds);
+    await addMultipleSongsToCurrentSetlist(selectedIds);
     onClose();
   };
 
@@ -43,7 +42,7 @@ export const SongPickerModal: React.FC<SongPickerModalProps> = ({ setlistId, onC
       >
         <div className="modal-header">
           <h3 id="song-picker-title">Add Songs to Setlist</h3>
-          <button className="btn btn-icon" onClick={onClose} title="Close" aria-label="Close dialog">
+          <button className="btn btn-icon" onClick={onClose} title="Close (Esc)" aria-label="Close dialog">
             <CloseIcon size={14} />
           </button>
         </div>
@@ -71,6 +70,9 @@ export const SongPickerModal: React.FC<SongPickerModalProps> = ({ setlistId, onC
           ) : (
             results.map(({ song }) => {
               const isSelected = selectedIds.includes(song.id);
+              const displayTitle = formatDisplayTitle(song.title);
+              const displayArtist = formatDisplayArtist(song.artist);
+
               return (
                 <div
                   key={song.id}
@@ -90,13 +92,13 @@ export const SongPickerModal: React.FC<SongPickerModalProps> = ({ setlistId, onC
                 >
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={{ fontWeight: 600, fontSize: '13.5px', color: 'var(--text-primary)' }}>
-                      {song.title}
+                      {displayTitle}
                     </div>
-                    {song.artist && (
+                    {displayArtist ? (
                       <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                        {song.artist}
+                        {displayArtist}
                       </div>
-                    )}
+                    ) : null}
                   </div>
 
                   <div

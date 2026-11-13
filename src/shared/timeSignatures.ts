@@ -8,6 +8,6 @@ export const COMMON_TIME_SIGNATURES = [
 ] as const;
 
 export function formatTimeSignatureDisplay(ts: string): string {
-  if (!ts) return '—';
+  if (!ts) return 'Unset';
   return ts;
 }

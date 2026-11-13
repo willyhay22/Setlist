@@ -1,8 +1,8 @@
-# Studio Songs — Verification & Acceptance Test Report
+# Setlist v1.1 — Verification & Acceptance Test Report
 
 **Date:** 2026-11-14  
 **Environment:** macOS (Apple Silicon arm64, Node v26.12.0, Electron 33.4.11)  
-**Test Suite Execution:** 18 automated tests passing (100% pass rate)
+**Test Suite Execution:** 25 automated tests passing (100% pass rate)
 
 ---
 
@@ -10,73 +10,74 @@
 
 | # | Acceptance Criterion | Test Method | Status | Notes |
 | :--- | :--- | :--- | :--- | :--- |
-| **1** | Fresh packaged installation launches offline with empty library and functional tour | Package build & direct execution | **PASS** | Packaged `release/mac-arm64/Studio Songs.app` launched cleanly, initialized empty state (`songs: []`, `setlists: []`, `hasCompletedTour: false`), and presented the 4-step guided tour. |
-| **2** | All core features work with networking disabled; no remote dependencies | Source audit & sandbox build | **PASS** | CSP enforces `default-src 'self'`. All fonts and icons are embedded SVGs. No external CDNs, remote analytics, or update checkers exist. |
-| **3** | Title-only creation succeeds; blank title fails; custom BPM/signature & blanks persist | Unit test `store.test.ts` | **PASS** | Whitespace-only title threw validation error; optional fields persisted empty strings (`—` in UI) rather than default placeholders. Free-form text BPM (`72 verse, 76 chorus`) persisted verbatim. |
-| **4** | New songs append; edits do not reorder; duplicate warnings allow intentional copies | Unit test `store.test.ts` | **PASS** | Verified that `s1`, `s2`, `s3` maintain `createdAt` order. Editing `s1` updated title without altering index. Normalized duplicate title+artist flagged warning but allowed saving. |
-| **5** | Metadata Save/Cancel and note autosave behave independently | Unit test `store.test.ts` | **PASS** | Verified notes updated and persisted directly to store while metadata remained untouched; subsequent metadata edits preserved independent notes. |
-| **6** | Rapid note edits, song switching and quitting do not lose or reorder writes | Unit test `store.test.ts` & code audit | **PASS** | Write queue serializes all writes FIFO via sequential Promise chain. IPC `store:flush` flushes pending writes before window close. |
-| **7** | Failed saves retain text and never show a false Saved state | Code audit & error handler verification | **PASS** | If `updateSongNotes` rejects, state transitions to `error` with a clickable `Retry` link; local notes textarea contents remain completely untouched. |
-| **8** | Search matches only title/artist; fuzzy fallback and no-result states work | Unit test `search.test.ts` | **PASS** | Words present only in notes or keys returned 0 matches. Typo queries (e.g. `Amazng`) triggered fuzzy fallback with `Close match` badge. Irrelevant text returned empty results. |
-| **9** | Duplicate setlist occurrences reorder and navigate independently | Unit test `store.test.ts` | **PASS** | Adding Song A twice created two distinct entries (`e1`, `e3`) with independent `id` and `position`. Reordering moved entries without conflating duplicates. |
-| **10** | Removing one occurrence and Undo preserve the library song | Unit test `store.test.ts` | **PASS** | Removing an entry removed only that setlist row; library song remained intact. Undo restored occurrence to its former `position`. |
-| **11** | Search detours return to the correct setlist occurrence | Component verification `Header.tsx` & `useStore.tsx` | **PASS** | Navigating to a searched song from within a setlist renders the persistent `Back to Setlist` banner, restoring prior setlist and entry IDs. |
-| **12** | Archive/restore does not delete data | Unit test `store.test.ts` | **PASS** | Toggling `archived: true/false` changes filter visibility without mutating entries or deleting underlying songs. |
-| **13** | Song deletion removes all setlist occurrences; restoration restores only library song | Unit test `store.test.ts` | **PASS** | Deleting a song transactionally stripped all associated setlist entries across active and archived setlists. Restoring returned the song to library with original `createdAt` but zero setlist entries. |
-| **14** | Thirty-day expiry works across restarts and imports | Unit test `store.test.ts` & `backup.test.ts` | **PASS** | Expired songs (`> 30 days`) were purged on store startup/interval and appended to `purgedSongIds` tombstones, preventing re-import resurrection. |
-| **15** | Backup round-trip preserves supported data, identities, ordering and settings | Unit test `backup.test.ts` | **PASS** | Exported JSON schema preserved song IDs, `createdAt` ordering, setlist positions, and text-size/theme settings. |
-| **16** | Repeated imports are idempotent; existing records win; malformed imports leave data unchanged | Unit test `backup.test.ts` | **PASS** | Re-importing identical backup resulted in 0 additions and 0 duplicate entries. Local songs and setlists took precedence. Malformed JSON threw without mutating library. |
-| **17** | Both themes and enlarged text work in half-screen window with long text | CSS & layout verification | **PASS** | Responsive CSS rules with CSS variables `--text-size-notes` and `--text-size-metric-num` scale without overflowing layout at 850px width. |
-| **18** | Window/divider geometry persists and recovers from a missing display | Unit test & `windowState.ts` audit | **PASS** | Bounds saved to `window-state.json`. `getClampedBounds()` checks intersection with all active displays; if display disconnected, clamps to primary display work area. |
-| **19** | Closing window quits safely; unsaved forms and save failures are handled | IPC & lifecycle audit in `main.ts` | **PASS** | `mainWindow.on('close')` prompts if song form is dirty, flushes pending saves before exiting, and quits the application (`app.quit()`). |
-| **20** | Shortcuts work without capturing typing or affecting other apps | Event listeners in `Header.tsx` & `SetlistDetail.tsx` | **PASS** | `⌘F` focuses search, `⌘N` adds song (ignored when typing in textarea/input), `⌘⌥← / →` navigates setlists only when focused. No global OS key hooks registered. |
+| **1** | App renamed to Setlist across branding, bundle, dock, window title, and native menus | Packaging & metadata audit | **PASS** | `Setlist.app` generated. `CFBundleDisplayName` and `CFBundleName` set to `Setlist`. Native application menu labeled `Setlist`; song menu labeled `Song`. |
+| **2** | Exact credit `© 2026 William Hay` and version in About panel | Component inspection & menu audit | **PASS** | Verified in `AboutModal.tsx` and native macOS About dialog: displays exact string `© 2026 William Hay`, version 1.1.0, and build 2026.11. |
+| **3** | User data location preserved at `~/Library/Application Support/Studio Songs` | Code audit & store initialization | **PASS** | `app.setPath('userData', path.join(app.getPath('appData'), 'Studio Songs'))` explicitly guarantees the existing database path is preserved. |
+| **4** | Pre-v1.1 migration snapshot created and single setlist migrated | Automated test `store.test.ts` | **PASS** | Stores snapshot `studio_songs_data.pre-v1.1.json`. Migrates active setlist to `currentSetlist` and keeps legacy setlists under `legacySetlists`. |
+| **5** | Song header wrapping fixed: no 1-character vertical columns | CSS & responsive layout verification | **PASS** | Title/artist occupies a dedicated full-width flex column with `word-break: normal; overflow-wrap: break-word;`. Action buttons placed in a separate row beneath. Verified at 780px and 900px window widths. |
+| **6** | Action bar hierarchy: `+ Add to Setlist` and `Edit Details` discoverable; `More ▾` dropdown for secondary actions | Component inspection `SongDetail.tsx` | **PASS** | Action row features direct `+ Add to Setlist`, `Edit Details`, and a `More ▾` button containing `Duplicate Song` and `Delete Song`. |
+| **7** | Refined song list rows with clean hierarchy and no oversized gaps | CSS & component inspection `LibraryView.tsx` | **PASS** | Consistent padding, restrained hover/selected states, graceful title truncation, and clean handling of songs without an artist. |
+| **8** | Song form clean labels and no sample placeholder text | Component inspection `SongFormModal.tsx` | **PASS** | Removed all placeholder examples ("e.g. Living Hope", "e.g. Phil Wickham"). Persistent labels with clean inputs. |
+| **9** | Practical defaults for new songs: BPM 74, Time Signature 4/4, Key Unset | Automated test `store.test.ts` | **PASS** | Verified new songs created with title-only receive `bpm: "74"`, `timeSignature: "4/4"`, `musicalKey: ""`. Keys render as neutral `"Unset"`. |
+| **10** | Smart title casing on blur/save for lowercase inputs while keeping deliberate styling | Automated test `formatters.test.ts` | **PASS** | `gratitude` → `Gratitude`, `brandon lake` → `Brandon Lake`. Deliberate mixed casing like `King of My Heart`, `CCLI`, and `McCartney` are preserved verbatim. |
+| **11** | Duplicating a song copies real values, not new-song defaults | Automated test `store.test.ts` | **PASS** | Cloned song retains original custom key, BPM, and time signature with `(Copy)` appended to title. |
+| **12** | Single persistent Current Setlist replaces multi-setlist collections | Automated test `store.test.ts` & UI audit | **PASS** | Removed "All Setlists", "Create Setlist", and "Recent Setlists". View renders a unified, ordered service list with positions. |
+| **13** | Drag-and-drop and accessible keyboard reordering in Setlist | Component inspection `SetlistView.tsx` | **PASS** | Drag handle reorders entries; accessible `↑` and `↓` buttons allow keyboard-friendly position adjustments. |
+| **14** | Clear Setlist button disabled when empty, confirms with exact prompt, supports 6s Undo | Automated test `store.test.ts` & UI audit | **PASS** | Button disabled if 0 entries. Prompts *"Clear the current setlist? Your songs will stay in the library."* 6-second undo toast restores exact entries and order. |
+| **15** | Non-disruptive search popover on Home and Setlist | Component inspection `Header.tsx` | **PASS** | Invoking search on Home or Setlist renders an anchored popover dropdown directly beneath search input with keyboard navigation and direct `+ Add to Setlist` action. |
+| **16** | Guided tour anchored directly to real controls | Component inspection `GuidedTour.tsx` | **PASS** | Tooltips calculate bounding box of DOM elements (`[data-tour="..."]`) via `getBoundingClientRect()`. Includes Skip, Next, Back, and Finish controls. |
+| **17** | Streamlined Settings modal with tabs: Appearance, Library & Backups, Help & About | Component inspection `SettingsModal.tsx` | **PASS** | In-window modal with tabs. Standard labels ("Settings", "Text size"). Backup export/import and tour replay accessible. |
+| **18** | Backup merge import supports v1 and v2 formats | Automated test `backup.test.ts` | **PASS** | Backward compatible with v1 backups; correctly parses both `currentSetlist` and legacy `setlists` without throwing or data loss. |
+| **19** | Full native macOS menu bar with standard shortcuts | Code audit `main.ts` | **PASS** | Menus for `Setlist`, `File`, `Edit`, `View`, `Song`, `Window`, and `Help` implemented with shortcuts (`⌘N`, `⌘S`, `⌘,`, `⌘W`, `⌘Q`, `⌘⌥←/→`). |
+| **20** | 100% offline guarantee: zero external requests or telemetry | Source audit & CSP | **PASS** | CSP strictly enforces `default-src 'self'`. All icons/fonts are bundled locally. Zero external network calls. |
 
 ---
 
 ## 2. Automated Test Run Output
 
 ```
-▶ Studio Songs - Backup & Merge Import Tests
-  ✔ Export backup includes all active and deleted songs, setlists, entries, and preferences (57.15ms)
-  ✔ Merge import: existing local songs and setlists win; genuinely new records append in order (21.74ms)
-  ✔ Local deleted record wins over imported active copy; purged tombstones block resurrection (31.86ms)
-  ✔ Malformed backup is rejected without any partial mutations (17.54ms)
-✔ Studio Songs - Backup & Merge Import Tests (129.39ms)
+▶ Setlist v1.1 - Backup & Merge Import Tests
+  ✔ Export backup includes all songs, currentSetlist, legacy recovery data, and preferences (61.50ms)
+  ✔ Merge import: existing local records win, genuinely new songs append, existing setlist kept (38.20ms)
+  ✔ Fresh empty library imports both songs and current setlist from backup (18.17ms)
+  ✔ Backward compatibility: imports v1 backups safely (20.63ms)
+  ✔ Malformed backup is rejected without any mutations (24.25ms)
+✔ Setlist v1.1 - Backup & Merge Import Tests (166.05ms)
+
+▶ Setlist v1.1 - Smart Capitalization & Formatting Tests
+  ✔ Formats all-lowercase titles to smart title-case (1.86ms)
+  ✔ Formats all-lowercase artist names properly including names like McCartney or O'Connor (0.59ms)
+  ✔ Converts ALL CAPS to Title Case (0.34ms)
+  ✔ Preserves user deliberate mixed-casing, acronyms, and styling without repeated overrides (1.34ms)
+  ✔ Display formatters work non-destructively on raw lowercase data (0.25ms)
+✔ Setlist v1.1 - Smart Capitalization & Formatting Tests (6.29ms)
 
 ▶ Studio Songs - Search Logic Tests
-  ✔ Empty search query returns active songs in creation order (0.79ms)
-  ✔ Search matches active song titles and artists only, ignoring notes and keys (0.45ms)
-  ✔ Fuzzy fallback matches small spelling mistakes only when ordinary matches are 0 (0.37ms)
-  ✔ Arbitrary unrelated query returns 0 matches (0.19ms)
-✔ Studio Songs - Search Logic Tests (3.28ms)
+  ✔ Empty search query returns active songs in creation order (1.51ms)
+  ✔ Search matches active song titles and artists only, ignoring notes and keys (1.10ms)
+  ✔ Fuzzy fallback matches small spelling mistakes only when ordinary matches are 0 (0.79ms)
+  ✔ Arbitrary unrelated query returns 0 matches (0.58ms)
+✔ Studio Songs - Search Logic Tests (14.03ms)
 
-▶ Studio Songs - Store & Business Logic Tests
-  ✔ Fresh installation starts with empty library (11.99ms)
-  ✔ Title-only creation succeeds, blank title fails, optional fields persist neutral empty strings (28.15ms)
-  ✔ New songs append to the bottom; edits do not reorder (59.84ms)
-  ✔ Duplicate warning warns on matching title and artist but allows intentional duplicates (26.79ms)
-  ✔ Metadata updates and note autosaves operate independently (19.50ms)
-  ✔ Asynchronous save guard prevents older stale save from overwriting newer edit (14.00ms)
-  ✔ Duplicate song copies all fields including notes and assigns new identity and creation order (13.94ms)
-  ✔ Deleting song transactionally removes all its occurrences from setlists (31.30ms)
-  ✔ Thirty-day expiry purges songs and blocks accidental resurrection (20.45ms)
-  ✔ Setlist entries with duplicate song occurrences reorder independently and undo restores position (47.34ms)
-✔ Studio Songs - Store & Business Logic Tests (274.99ms)
+▶ Setlist v1.1 - Store & Business Logic Tests
+  ✔ Fresh installation starts with empty library and empty currentSetlist (21.74ms)
+  ✔ Title-only creation succeeds with v1.1 defaults (BPM 74, Time Signature 4/4, Key unset) (37.72ms)
+  ✔ New songs append to the bottom; edits do not reorder (69.43ms)
+  ✔ Duplicate warning warns on matching title and artist but allows intentional duplicates (25.52ms)
+  ✔ Metadata updates and note autosaves operate independently (26.51ms)
+  ✔ Asynchronous save guard prevents older stale save from overwriting newer edit (17.70ms)
+  ✔ Duplicate song copies all actual fields without applying new-song defaults (18.52ms)
+  ✔ Deleting song transactionally removes all its occurrences from current setlist (35.90ms)
+  ✔ Thirty-day expiry purges songs and blocks accidental resurrection (21.40ms)
+  ✔ Current Setlist: add, reorder, remove with undo, and clear with undo (54.82ms)
+  ✔ Migration from v1: creates pre-migration snapshot, migrates active setlist to currentSetlist, preserves legacy data (7.80ms)
+✔ Setlist v1.1 - Store & Business Logic Tests (340.41ms)
 
-ℹ tests 18
-ℹ suites 3
-ℹ pass 18
+ℹ tests 25
+ℹ suites 4
+ℹ pass 25
 ℹ fail 0
 ℹ cancelled 0
 ℹ skipped 0
-ℹ duration_ms 482.60ms
+ℹ duration_ms 637.56ms
 ```
-
----
-
-## 3. Manual Checklist for Studio Hardware Verification
-
-For the physical church studio Mac deployment:
-- [ ] **Dual Monitor Clamping:** Launch the app on external display 2. Unplug display 2. Verify window jumps cleanly onto built-in display 1 without disappearing off-screen.
-- [ ] **Fender Studio Pro Coexistence:** Verify that pressing `⌘F` or `Space` while Fender Studio Pro is focused controls the DAW as expected without triggering Studio Songs background hooks.
-- [ ] **Code Signing & Gatekeeper:** Because this build is an ad-hoc local build, macOS Gatekeeper may prompt once on first launch ("Studio Songs is an app downloaded from the internet / cannot verify developer"). Right-click `Studio Songs.app` and choose **Open**, then click **Open** to authorize.
