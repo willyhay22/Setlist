@@ -51,7 +51,12 @@ export class DurableStore {
       try {
         const raw = fs.readFileSync(this.dataFilePath, 'utf-8');
         const parsed = JSON.parse(raw);
+        const originalVersion = Number(parsed.schemaVersion) || 1;
         this.memoryData = this.validateAndMigrate(parsed);
+        // If data was migrated from an older schema, persist the migrated structure immediately
+        if (originalVersion < CURRENT_SCHEMA_VERSION) {
+          await this.persistDirect(this.memoryData);
+        }
       } catch (err: any) {
         // If main file is corrupted, check if backup file exists and is valid
         if (fs.existsSync(this.backupFilePath)) {
