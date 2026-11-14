@@ -3,6 +3,7 @@
   "version": "1.3.0",
   "description": "Setlist - Offline musical reference and service running order tool",
   "author": "William Hay",
+  "license": "MIT",
   "main": "dist-electron/main/main.js",
   "scripts": {
     "dev": "vite",

@@ -1,9 +1,10 @@
-import { app, BrowserWindow, ipcMain, dialog, nativeTheme, Menu, MenuItemConstructorOptions, clipboard } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, nativeTheme, Menu, MenuItemConstructorOptions, clipboard, shell } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { DurableStore } from './store';
 import { WindowStateManager } from './windowState';
 import { ImportOptions } from '../shared/types';
+import { checkForUpdates } from './updater';
 
 // App branding: Setlist
 app.setName('Setlist');
@@ -104,6 +105,20 @@ async function createWindow() {
 
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show();
+
+    // Silent background check for updates after 3s (fails quietly if offline)
+    setTimeout(async () => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        try {
+          const res = await checkForUpdates(app.getVersion());
+          if (res.updateAvailable) {
+            mainWindow.webContents.send('app:update-available', res);
+          }
+        } catch {
+          // Silent catch for background check
+        }
+      }
+    }, 3000);
   });
 
   mainWindow.on('closed', () => {
@@ -163,6 +178,19 @@ ipcMain.handle('store:touchRecentSong', async (_, songId) => store.touchRecentSo
 ipcMain.handle('store:flush', async () => store.flush());
 
 ipcMain.handle('theme:getSystem', () => (nativeTheme.shouldUseDarkColors ? 'dark' : 'light'));
+
+// Updates & External Links
+ipcMain.handle('app:checkForUpdates', async () => {
+  return checkForUpdates(app.getVersion());
+});
+
+ipcMain.handle('app:openExternal', async (_, url: string) => {
+  if (typeof url === 'string' && (url.startsWith('https://github.com/') || url.startsWith('http://localhost'))) {
+    await shell.openExternal(url);
+    return { success: true };
+  }
+  return { success: false, error: 'Untrusted URL' };
+});
 
 // Window close confirmation response
 ipcMain.on('app:respond-close', async (_, canClose: boolean) => {
@@ -231,6 +259,42 @@ ipcMain.handle('dialog:importBackup', async (_, options: ImportOptions) => {
   }
 });
 
+// Manual Update Check via Native Dialog
+async function handleManualUpdateCheck() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const res = await checkForUpdates(app.getVersion());
+  if (res.updateAvailable && res.releaseUrl) {
+    const { response } = await dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      title: 'Update Available',
+      message: `A new version of Setlist is available: v${res.latestVersion}`,
+      detail: `You are running version ${app.getVersion()}.\n\nWould you like to open GitHub to download the new version?`,
+      buttons: ['Download Update', 'Cancel'],
+      defaultId: 0,
+      cancelId: 1,
+    });
+    if (response === 0) {
+      shell.openExternal(res.releaseUrl);
+    }
+  } else if (res.error) {
+    await dialog.showMessageBox(mainWindow, {
+      type: 'warning',
+      title: 'Update Check',
+      message: 'Could not connect to GitHub.',
+      detail: `${res.error}\n\nMake sure your Mac is connected to the internet.`,
+      buttons: ['OK'],
+    });
+  } else {
+    await dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      title: 'Setlist is Up to Date',
+      message: `You're on the latest version of Setlist (v${app.getVersion()}).`,
+      detail: 'No newer updates are available.',
+      buttons: ['OK'],
+    });
+  }
+}
+
 // Complete Native Application Menu Bar
 function createApplicationMenu() {
   const isMac = process.platform === 'darwin';
@@ -244,6 +308,10 @@ function createApplicationMenu() {
               {
                 label: 'About Setlist',
                 role: 'about' as const,
+              },
+              {
+                label: 'Check for Updates…',
+                click: () => handleManualUpdateCheck(),
               },
               { type: 'separator' as const },
               {
@@ -414,6 +482,11 @@ function createApplicationMenu() {
         {
           label: 'Keyboard Shortcuts',
           click: () => sendRendererAction('open-shortcuts'),
+        },
+        { type: 'separator' as const },
+        {
+          label: 'Check for Updates…',
+          click: () => handleManualUpdateCheck(),
         },
         { type: 'separator' as const },
         {

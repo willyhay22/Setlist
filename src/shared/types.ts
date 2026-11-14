@@ -108,6 +108,16 @@ export interface ImportResult {
   errors?: string[];
 }
 
+export interface UpdateCheckResult {
+  updateAvailable: boolean;
+  currentVersion: string;
+  latestVersion?: string;
+  releaseUrl?: string;
+  releaseNotes?: string;
+  publishedAt?: string;
+  error?: string;
+}
+
 export interface SongInput {
   title: string;
   artist?: string;

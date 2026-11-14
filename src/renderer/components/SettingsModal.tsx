@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useStore } from '../hooks/useStore';
-import { TextSize, ThemePreference, ImportResult } from '../../shared/types';
+import { TextSize, ThemePreference, ImportResult, UpdateCheckResult } from '../../shared/types';
 import { ImportSummaryModal } from './ImportSummaryModal';
 import { AboutModal } from './AboutModal';
 import { CloseIcon, SettingsIcon, TrashIcon } from './Icons';
@@ -29,6 +29,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, initialTa
   const [importAppearance, setImportAppearance] = useState(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
   const [importErrorMessage, setImportErrorMessage] = useState<string | null>(null);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [updateResult, setUpdateResult] = useState<UpdateCheckResult | null>(null);
 
   const textSize = state?.preferences.textSize || 'standard';
   const theme = state?.preferences.theme || 'system';
@@ -92,6 +94,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, initialTa
   const handleOpenRecentlyDeleted = () => {
     onClose();
     setIsRecentlyDeletedOpen(true);
+  };
+
+  const handleCheckForUpdates = async () => {
+    if (!window.api?.checkForUpdates) return;
+    setCheckingUpdate(true);
+    try {
+      const res = await window.api.checkForUpdates();
+      setUpdateResult(res);
+    } catch {
+      setUpdateResult({
+        updateAvailable: false,
+        currentVersion: '1.3.0',
+        error: 'Unable to check for updates (offline or network error)',
+      });
+    } finally {
+      setCheckingUpdate(false);
+    }
   };
 
   return (
@@ -305,6 +324,49 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, initialTa
                     <div><kbd style={{ background: 'var(--bg-tertiary)', padding: '2px 5px', borderRadius: '4px' }}>⌘,</kbd> Settings</div>
                     <div><kbd style={{ background: 'var(--bg-tertiary)', padding: '2px 5px', borderRadius: '4px' }}>⌘⌥← / →</kbd> Prev / Next in setlist</div>
                     <div><kbd style={{ background: 'var(--bg-tertiary)', padding: '2px 5px', borderRadius: '4px' }}>Esc</kbd> Close dialog</div>
+                  </div>
+                </div>
+
+                <hr style={{ border: 'none', borderTop: '1px solid var(--border-subtle)' }} />
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div>
+                    <h4 style={{ fontSize: '13px', fontWeight: 600 }}>Updates</h4>
+                    <div style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
+                      {checkingUpdate && 'Checking GitHub for updates…'}
+                      {!checkingUpdate && updateResult && (
+                        updateResult.updateAvailable ? (
+                          <span style={{ color: 'var(--accent-color)', fontWeight: 500 }}>
+                            Update available: v{updateResult.latestVersion}
+                          </span>
+                        ) : updateResult.error ? (
+                          <span>{updateResult.error}</span>
+                        ) : (
+                          <span>You're running the latest version (v{updateResult.currentVersion})</span>
+                        )
+                      )}
+                      {!checkingUpdate && !updateResult && (
+                        <span>Check GitHub Releases for new updates</span>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    {updateResult?.updateAvailable && updateResult.releaseUrl ? (
+                      <button
+                        className="btn btn-primary"
+                        onClick={() => window.api.openExternalUrl(updateResult.releaseUrl!)}
+                      >
+                        Download v{updateResult.latestVersion}
+                      </button>
+                    ) : (
+                      <button
+                        className="btn"
+                        onClick={handleCheckForUpdates}
+                        disabled={checkingUpdate}
+                      >
+                        {checkingUpdate ? 'Checking…' : 'Check for Updates'}
+                      </button>
+                    )}
                   </div>
                 </div>
 

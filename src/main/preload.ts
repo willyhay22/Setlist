@@ -7,6 +7,7 @@ import {
   ImportResult,
   SongInput,
   TextSize,
+  UpdateCheckResult,
 } from '../shared/types';
 
 export interface ElectronAPI {
@@ -39,6 +40,11 @@ export interface ElectronAPI {
   onRequestClose: (callback: () => void) => () => void;
   respondCanClose: (canClose: boolean) => void;
   flushPendingSaves: () => Promise<void>;
+
+  // Updates & Links
+  checkForUpdates: () => Promise<UpdateCheckResult>;
+  openExternalUrl: (url: string) => Promise<{ success: boolean; error?: string }>;
+  onUpdateAvailable: (callback: (info: UpdateCheckResult) => void) => () => void;
 
   // Native application menu command triggers
   onMenuAction: (callback: (action: string, payload?: any) => void) => () => void;
@@ -81,6 +87,14 @@ const api: ElectronAPI = {
   },
   respondCanClose: (canClose) => ipcRenderer.send('app:respond-close', canClose),
   flushPendingSaves: () => ipcRenderer.invoke('store:flush'),
+
+  checkForUpdates: () => ipcRenderer.invoke('app:checkForUpdates'),
+  openExternalUrl: (url) => ipcRenderer.invoke('app:openExternal', url),
+  onUpdateAvailable: (callback) => {
+    const handler = (_: any, info: UpdateCheckResult) => callback(info);
+    ipcRenderer.on('app:update-available', handler);
+    return () => ipcRenderer.removeListener('app:update-available', handler);
+  },
 
   onMenuAction: (callback) => {
     const handler = (_: any, action: string, payload?: any) => callback(action, payload);

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { StoreProvider, useStore } from './hooks/useStore';
 import { Header } from './components/Header';
 import { HomeView } from './components/HomeView';
@@ -8,7 +8,8 @@ import { SongFormModal } from './components/SongFormModal';
 import { SettingsModal } from './components/SettingsModal';
 import { RecentlyDeletedModal } from './components/RecentlyDeletedModal';
 import { GuidedTour } from './components/GuidedTour';
-import { UndoIcon } from './components/Icons';
+import { UndoIcon, CloseIcon } from './components/Icons';
+import { UpdateCheckResult } from '../shared/types';
 import './styles/app.css';
 
 const AppContent: React.FC = () => {
@@ -29,6 +30,19 @@ const AppContent: React.FC = () => {
     isTourOpen,
   } = useStore();
 
+  const [updateInfo, setUpdateInfo] = useState<UpdateCheckResult | null>(null);
+  const [showUpdateBanner, setShowUpdateBanner] = useState(true);
+
+  useEffect(() => {
+    if (window.api?.onUpdateAvailable) {
+      const cleanup = window.api.onUpdateAvailable((info) => {
+        setUpdateInfo(info);
+        setShowUpdateBanner(true);
+      });
+      return cleanup;
+    }
+  }, []);
+
   if (loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--bg-primary)' }}>
@@ -41,6 +55,35 @@ const AppContent: React.FC = () => {
     <div className="app-container">
       {/* Top Header */}
       <Header />
+
+      {/* Update Available Banner */}
+      {updateInfo?.updateAvailable && showUpdateBanner && (
+        <div className="update-banner" role="status">
+          <span>A new version of Setlist (v{updateInfo.latestVersion}) is available.</span>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button
+              className="btn btn-primary"
+              style={{ height: '24px', padding: '0 10px', fontSize: '11.5px' }}
+              onClick={() => {
+                if (updateInfo.releaseUrl) {
+                  window.api.openExternalUrl(updateInfo.releaseUrl);
+                }
+              }}
+            >
+              Download Update
+            </button>
+            <button
+              className="btn btn-icon"
+              style={{ width: '22px', height: '22px' }}
+              title="Dismiss update notice"
+              aria-label="Dismiss update notice"
+              onClick={() => setShowUpdateBanner(false)}
+            >
+              <CloseIcon size={12} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Search Detour Banner */}
       {searchDetourEntryId && activeTab === 'library' && (

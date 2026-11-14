@@ -79,7 +79,20 @@ export const AboutModal: React.FC<AboutModalProps> = ({ onClose }) => {
             Version 1.3.0 (Build 2026.11)
           </div>
 
-          <div style={{ marginTop: '20px', fontSize: '12px', fontWeight: 500, color: 'var(--text-muted)' }}>
+          <div style={{ marginTop: '16px', fontSize: '11.5px' }}>
+            <a
+              href="#github"
+              onClick={(e) => {
+                e.preventDefault();
+                window.api?.openExternalUrl('https://github.com/willyhay22/Setlist');
+              }}
+              style={{ color: 'var(--accent-color)', textDecoration: 'none' }}
+            >
+              github.com/willyhay22/Setlist
+            </a>
+          </div>
+
+          <div style={{ marginTop: '8px', fontSize: '12px', fontWeight: 500, color: 'var(--text-muted)' }}>
             © 2026 William Hay
           </div>
         </div>

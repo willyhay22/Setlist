@@ -1,93 +1,62 @@
-# Setlist (v1.3.0)
+# Setlist
 
-**Setlist** is a lightweight, reliable, 100% offline macOS desktop application designed as a fast musical reference and service running-order tool for studio and church production environments alongside DAWs such as Fender Studio Pro.
-
----
-
-## 1. Overview & Capabilities
-
-- **Offline-First Reference:** Zero cloud sync, zero telemetry, zero analytics, zero external network requests.
-- **Manual Musical Details:** Manually enter song title, artist, key, tempo (BPM), time signature, and arrangement notes.
-- **Studio-Grade Readability:** Large, high-contrast Key root (48–56px) and BPM (48–56px) with distinct secondary major/minor designations and supporting time signature. Standard text scaling is optimized for arm's length reading from a studio console seat.
-- **Copy BPM Only:** One-click copy button on selected songs that copies strictly trimmed tempo numbers or notation directly to the clipboard for instant DAW transport entry.
-- **Default Provenance Tracking:** Unreviewed convenience defaults (BPM 74, 4/4) display a calm "Needs checking" badge with one-click verification. Existing libraries are protected against retroactive false positives.
-- **Single Reusable Setlist:** Build, arrange, drag-and-drop, or keyboard-reorder your service running order with step navigation (`⌘⌥←` / `⌘⌥→`) and safe undo.
-- **Resizable Notes:** Horizontal draggable divider between song information and arrangement notes with durable height persistence in preferences.
-- **Original macOS Icon & Motion:** Tasteful, restrained setlist icon and subtle macOS motion with full Reduce Motion accessibility support.
+A fast, offline musical reference and service running-order app for macOS. Built for church and studio desks alongside DAWs like Fender Studio Pro.
 
 ---
 
-## 2. System Requirements & Compatibility
+## Why Setlist?
 
-- **Supported Architecture:** Apple Silicon (`arm64` — M1, M2, M3, M4 Macs). *Intel (`x86_64`) can be compiled from source.*
-- **Operating System:** macOS 10.15 Catalina or higher (macOS 11 Big Sur or newer recommended for Apple Silicon). Tested on macOS 14 Sonoma / macOS 15 Sequoia.
-- **Signing & Gatekeeper Status:** Ad-hoc signed (`codesign -s -`).
-  > **Note on Gatekeeper:** Because this release is not signed with an Apple Developer ID distribution certificate, macOS may show a prompt stating that Apple could not verify the developer on first launch. To open:
-  > 1. In **Finder**, right-click (or Control-click) `Setlist.app`.
-  > 2. Select **Open** from the context menu.
-  > 3. Click **Open** in the confirmation dialog. Setlist will launch normally thereafter.
+During a service or recording session, you don’t need a complicated browser tab, a bloated DAW plugin, or a laggy cloud document. Setlist gives you instant, glanceable song details on your secondary display so you can stay focused on the mix:
 
----
-
-## 3. Installation & Downloads
-
-Pre-built binaries are prepared locally and can be published to GitHub Releases:
-
-- **Apple Silicon Disk Image (DMG):** `release/Setlist-1.3.0-arm64.dmg`  
-  *(Double-click the DMG and drag Setlist to `/Applications`)*
-- **Apple Silicon Application Archive (ZIP):** `release/Setlist-1.3.0-arm64.zip`  
-  *(Unzip and move `Setlist.app` to `/Applications`)*
-- **Integrity Checksums:** SHA-256 checksums are recorded in [`release/SHA256SUMS.txt`](file:///Users/wihay/Dev/studio-songs/release/SHA256SUMS.txt).
-
-### Data Storage & Preservation
-Every fresh installation with no prior data starts with an empty library. User data is stored durably outside the app bundle and repository at:
-```
-~/Library/Application Support/Studio Songs/studio_songs_data.json
-```
-Updating the application preserves existing songs, notes, running orders, and preferences.
+- **Glanceable across the desk** — High-contrast Key and BPM displays designed for quick reading at arm’s length.
+- **One-click BPM copying** — Click once (or hit Enter) on any song to copy its tempo directly to your clipboard for your DAW transport.
+- **Drag-and-drop setlists** — Build and reorder your service running order in seconds, with quick step navigation (`⌘⌥←` / `⌘⌥→`).
+- **Always offline** — Zero accounts, zero cloud dependencies, and zero tracking. All data is saved safely to your Mac.
+- **Update notifications** — When connected to the internet, Setlist quietly checks for new releases so you're always running the latest version.
 
 ---
 
-## 4. Building & Testing From Source
+## Download & Install
 
-### Prerequisites
-- macOS with Node.js 20 or 22 LTS
-- Git
+**No setup or dependencies required.** Setlist is a completely self-contained macOS app. You do not need to install Node, Python, Homebrew, or any command-line tools on your studio Mac.
 
-### Build Commands
+1. Download **`Setlist-1.3.0-arm64.dmg`** from [**Releases**](https://github.com/willyhay22/Setlist/releases).
+2. Open the DMG and drag **Setlist** into your **Applications** folder.
+3. Launch Setlist from Applications or Spotlight.
+
+> **First launch note:** Because Setlist is currently ad-hoc signed, macOS may ask for confirmation on the very first launch. Right-click (or Control-click) `Setlist.app` in Finder, select **Open**, and click **Open**. After that, it launches normally every time.
+
+---
+
+## Keyboard Shortcuts
+
+| Shortcut | Action |
+| :--- | :--- |
+| `⌘ F` | Find song in library |
+| `⌘ N` | New song |
+| `⌘ S` | Save song / notes |
+| `⌘ ,` | Settings (Theme, Text Size, Backups) |
+| `⌘⌥ ←` / `⌘⌥ →` | Previous / Next song in setlist |
+| `Esc` | Close dialog or search |
+
+---
+
+## Building from Source
+
+If you want to contribute or build locally:
+
 ```bash
-git clone <repository-url>
-cd studio-songs
-
-# Install exact dependencies
-npm ci
-
-# Run automated test suites (33 unit tests across 5 suites)
+git clone https://github.com/willyhay22/Setlist.git
+cd Setlist
+npm install
 npm test
-
-# Build production bundle (renderer & electron)
-npm run build
-
-# Package standalone macOS application (directory)
-npm run package
-
-# Package installer DMG and standalone ZIP
 npm run package:dmg
-npm run package:zip
 ```
 
 ---
 
-## 5. Documentation & Resources
+## Documentation & License
 
-- [User Guide](file:///Users/wihay/Dev/studio-songs/USER_GUIDE.md): Detailed workflow walkthrough, keyboard shortcuts, and backup/restore guide.
-- [Changelog](file:///Users/wihay/Dev/studio-songs/CHANGELOG.md): Complete release history from v1.0.0 to v1.3.0.
-- [Verification Test Report](file:///Users/wihay/Dev/studio-songs/TEST_REPORT.md): Automated and visual test verification results.
-- [Future MIDI Investigation Note](file:///Users/wihay/Dev/studio-songs/FUTURE_MIDI.md): Architectural notes regarding future DAW/MIDI controllers (Korg nanoKONTROL2, Behringer X-Touch) — *no MIDI features are active in current versions*.
-- [Bug Report Template](file:///Users/wihay/Dev/studio-songs/.github/ISSUE_TEMPLATE/bug_report.md): Issue template for reporting bugs with system information.
-
----
-
-## 6. License Status
-
-The repository currently contains copyright notices credited to William Hay (`© 2026 William Hay`). A formal open-source license (such as MIT) or proprietary/all-rights-reserved license decision can be selected by the project owner upon repository publishing.
+- [User Guide](docs/USER_GUIDE.md) — Feature walkthrough, keyboard shortcuts, and backup/restore guide.
+- [Changelog](CHANGELOG.md) — Version history and release notes.
+- Released under the [MIT License](LICENSE). Copyright © 2026 William Hay.
