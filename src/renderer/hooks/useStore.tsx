@@ -76,6 +76,8 @@ interface StoreContextType {
   updatePreferences: (prefs: Partial<AppPreferences>) => Promise<AppPreferences>;
   exportBackup: () => Promise<{ cancelled: boolean; filePath?: string; error?: string }>;
   importBackup: (options: { importPreferences?: boolean }) => Promise<{ cancelled: boolean; result?: ImportResult; error?: string }>;
+  importSpreadsheet: () => Promise<{ cancelled: boolean; result?: ImportResult; error?: string }>;
+  exportTemplate: () => Promise<{ cancelled: boolean; filePath?: string; error?: string }>;
 }
 
 const StoreContext = createContext<StoreContextType | null>(null);
@@ -388,6 +390,18 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return res;
   }, [refreshState]);
 
+  const importSpreadsheet = useCallback(async () => {
+    const res = await window.api.importSpreadsheet();
+    if (!res.cancelled && res.result?.success) {
+      await refreshState();
+    }
+    return res;
+  }, [refreshState]);
+
+  const exportTemplate = useCallback(async () => {
+    return window.api.exportTemplate();
+  }, []);
+
   const openSongModal = useCallback((mode: 'create' | 'edit' | 'duplicate', song?: Song) => {
     setSongModal({ isOpen: true, mode, song });
   }, []);
@@ -469,6 +483,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           setSettingsInitialTab('library');
           setIsSettingsOpen(true);
           break;
+        case 'trigger-spreadsheet-import':
+          setSettingsInitialTab('library');
+          setIsSettingsOpen(true);
+          break;
+        case 'trigger-template-export':
+          exportTemplate();
+          break;
       }
     });
     return unsubscribe;
@@ -536,6 +557,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         updatePreferences,
         exportBackup,
         importBackup,
+        importSpreadsheet,
+        exportTemplate,
       }}
     >
       {children}

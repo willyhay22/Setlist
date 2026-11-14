@@ -5,6 +5,11 @@ import { DurableStore } from './store';
 import { WindowStateManager } from './windowState';
 import { ImportOptions } from '../shared/types';
 import { checkForUpdates } from './updater';
+import {
+  parseSpreadsheet,
+  generateTemplateWorkbookBuffer,
+  generateTemplateCsv,
+} from './spreadsheetImporter';
 
 // App branding: Setlist
 app.setName('Setlist');
@@ -259,6 +264,68 @@ ipcMain.handle('dialog:importBackup', async (_, options: ImportOptions) => {
   }
 });
 
+// Spreadsheet Import Dialog (Excel / CSV)
+ipcMain.handle('dialog:importSpreadsheet', async () => {
+  if (!mainWindow) return { cancelled: true };
+
+  const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+    title: 'Import Songs from Spreadsheet',
+    properties: ['openFile'],
+    filters: [
+      { name: 'Spreadsheets (*.xlsx, *.xls, *.csv, *.tsv)', extensions: ['xlsx', 'xls', 'csv', 'tsv'] },
+      { name: 'Excel Workbook (*.xlsx, *.xls)', extensions: ['xlsx', 'xls'] },
+      { name: 'CSV File (*.csv)', extensions: ['csv'] },
+    ],
+  });
+
+  if (canceled || !filePaths || filePaths.length === 0) {
+    return { cancelled: true };
+  }
+
+  try {
+    const parsed = parseSpreadsheet(filePaths[0]);
+    if (parsed.errors && parsed.errors.length > 0) {
+      return { cancelled: false, error: parsed.errors.join('\n') };
+    }
+    const result = await store.importSpreadsheetSongs(parsed.songs);
+    result.skippedSongsCount += parsed.skippedCount;
+    return { cancelled: false, result };
+  } catch (err: any) {
+    return { cancelled: false, error: err.message };
+  }
+});
+
+// Spreadsheet Template Export Dialog
+ipcMain.handle('dialog:exportTemplate', async () => {
+  if (!mainWindow) return { cancelled: true };
+
+  const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+    title: 'Save Setlist Import Template',
+    defaultPath: 'Setlist_Song_Import_Template.xlsx',
+    filters: [
+      { name: 'Excel Workbook (*.xlsx)', extensions: ['xlsx'] },
+      { name: 'CSV File (*.csv)', extensions: ['csv'] },
+    ],
+  });
+
+  if (canceled || !filePath) {
+    return { cancelled: true };
+  }
+
+  try {
+    if (filePath.toLowerCase().endsWith('.csv')) {
+      const csv = generateTemplateCsv();
+      fs.writeFileSync(filePath, csv, 'utf-8');
+    } else {
+      const buf = generateTemplateWorkbookBuffer();
+      fs.writeFileSync(filePath, buf);
+    }
+    return { cancelled: false, filePath };
+  } catch (err: any) {
+    return { cancelled: false, error: err.message };
+  }
+});
+
 // Manual Update Check via Native Dialog
 async function handleManualUpdateCheck() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -353,6 +420,15 @@ function createApplicationMenu() {
           label: 'Save',
           accelerator: 'CmdOrCtrl+S',
           click: () => sendRendererAction('save'),
+        },
+        { type: 'separator' as const },
+        {
+          label: 'Import Spreadsheet (Excel / CSV)…',
+          click: () => sendRendererAction('trigger-spreadsheet-import'),
+        },
+        {
+          label: 'Save Spreadsheet Template…',
+          click: () => sendRendererAction('trigger-template-export'),
         },
         { type: 'separator' as const },
         {
@@ -505,8 +581,8 @@ app.whenReady().then(async () => {
   // Set native macOS About Panel configuration
   app.setAboutPanelOptions({
     applicationName: 'Setlist',
-    applicationVersion: '1.3.0',
-    version: '1.3.0',
+    applicationVersion: '1.4.0',
+    version: '1.4.0',
     copyright: '© 2026 William Hay',
   });
 

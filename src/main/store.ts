@@ -896,4 +896,28 @@ export class DurableStore {
       errors: errors.length > 0 ? errors : undefined,
     };
   }
+
+  public async importSpreadsheetSongs(songs: SongInput[]): Promise<ImportResult> {
+    await this.initialize();
+    let addedSongsCount = 0;
+    let skippedSongsCount = 0;
+
+    for (const input of songs) {
+      if (!input.title || !input.title.trim()) {
+        skippedSongsCount++;
+        continue;
+      }
+
+      await this.createSong(input);
+      addedSongsCount++;
+    }
+
+    return {
+      success: true,
+      addedSongsCount,
+      skippedSongsCount,
+      purgedResurrectionsBlockedCount: 0,
+      message: `Successfully imported ${addedSongsCount} song${addedSongsCount === 1 ? '' : 's'} from spreadsheet.`,
+    };
+  }
 }

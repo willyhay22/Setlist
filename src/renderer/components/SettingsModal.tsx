@@ -19,6 +19,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, initialTa
     updatePreferences,
     exportBackup,
     importBackup,
+    importSpreadsheet,
+    exportTemplate,
     setIsRecentlyDeletedOpen,
     setIsTourOpen,
   } = useStore();
@@ -29,6 +31,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, initialTa
   const [importAppearance, setImportAppearance] = useState(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
   const [importErrorMessage, setImportErrorMessage] = useState<string | null>(null);
+  const [spreadsheetMessage, setSpreadsheetMessage] = useState<string | null>(null);
+  const [spreadsheetError, setSpreadsheetError] = useState<string | null>(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [updateResult, setUpdateResult] = useState<UpdateCheckResult | null>(null);
 
@@ -82,6 +86,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, initialTa
         setImportErrorMessage(res.error);
       } else if (res.result) {
         setImportResult(res.result);
+      }
+    }
+  };
+
+  const handleImportSpreadsheet = async () => {
+    setSpreadsheetError(null);
+    setSpreadsheetMessage(null);
+    const res = await importSpreadsheet();
+    if (!res.cancelled) {
+      if (res.error) {
+        setSpreadsheetError(res.error);
+      } else if (res.result) {
+        setImportResult(res.result);
+      }
+    }
+  };
+
+  const handleExportTemplate = async () => {
+    setSpreadsheetError(null);
+    setSpreadsheetMessage(null);
+    const res = await exportTemplate();
+    if (!res.cancelled) {
+      if (res.error) {
+        setSpreadsheetError(`Template export error: ${res.error}`);
+      } else if (res.filePath) {
+        setSpreadsheetMessage(`Template saved to: ${res.filePath}`);
       }
     }
   };
@@ -283,6 +313,36 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, initialTa
 
                 <hr style={{ border: 'none', borderTop: '1px solid var(--border-subtle)' }} />
 
+                <div>
+                  <h4 style={{ fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Import from Spreadsheet (Excel / CSV)</h4>
+                  <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '10px' }}>
+                    Batch-import songs from an Excel (.xlsx, .xls) or CSV spreadsheet using standard column headers.
+                  </p>
+
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <button className="btn btn-primary" onClick={handleImportSpreadsheet}>
+                      Import Spreadsheet…
+                    </button>
+                    <button className="btn" onClick={handleExportTemplate}>
+                      Download Template…
+                    </button>
+                  </div>
+
+                  {spreadsheetMessage && (
+                    <div style={{ marginTop: '8px', padding: '6px 10px', background: 'var(--bg-tertiary)', borderRadius: '6px', fontSize: '12px' }}>
+                      {spreadsheetMessage}
+                    </div>
+                  )}
+
+                  {spreadsheetError && (
+                    <div style={{ marginTop: '8px', padding: '6px 10px', background: 'var(--danger-bg)', color: 'var(--danger-color)', borderRadius: '6px', fontSize: '12px' }}>
+                      {spreadsheetError}
+                    </div>
+                  )}
+                </div>
+
+                <hr style={{ border: 'none', borderTop: '1px solid var(--border-subtle)' }} />
+
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div>
                     <h4 style={{ fontSize: '13px', fontWeight: 600 }}>Recently Deleted</h4>
@@ -376,7 +436,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, initialTa
                   <div>
                     <h4 style={{ fontSize: '13px', fontWeight: 600 }}>About Setlist</h4>
                     <div style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
-                      Version 1.3.0 • © 2026 William Hay
+                      Version 1.4.0 • © 2026 William Hay
                     </div>
                   </div>
                   <button className="btn" onClick={() => setIsAboutOpen(true)}>

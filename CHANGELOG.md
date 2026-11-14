@@ -4,6 +4,17 @@ All notable changes to **Setlist** are documented in this file.
 
 ---
 
+## [1.4.0] - 2026-11-14
+
+### Added
+- **Spreadsheet Batch Import (Excel & CSV):** Bulk import song catalogs directly from Excel workbooks (`.xlsx`, `.xls`) or CSV files. Automatically maps common column variations (`Title`, `Artist`, `Key`, `BPM`, `Time Signature`, `Notes`), smart title-cases names, normalizes musical keys (e.g. `Aflat` → `Ab`, `c minor` → `Cm`), and assigns default value review tracking.
+- **Embedded Title Parsing:** Intelligent fallback that extracts musical key and tempo from title strings if separate columns were omitted (e.g. `Thank God I'm Free-E 128` → Title: `Thank God I'm Free`, Key: `E`, BPM: `128`).
+- **Starter Import Templates:** Bundled starter templates (`Setlist_Song_Import_Template.xlsx` and `Setlist_Song_Import_Template.csv`) downloadable directly within the app or from the GitHub repository.
+- **Native Menu & Settings Integration:** Added `Import Spreadsheet (Excel / CSV)…` and `Save Spreadsheet Template…` to both the native macOS `File` menu and the **Settings → Library & Backups** tab.
+- **Automated `afterPack` Code Signing Hook:** Implemented deep ad-hoc signing (`codesign --force --deep --sign -`) across all internal helper binaries and frameworks during packaging to eliminate macOS Gatekeeper damaged-app false positives.
+
+---
+
 ## [1.3.0] - 2026-11-14
 
 ### Added

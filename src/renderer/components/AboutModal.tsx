@@ -76,7 +76,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ onClose }) => {
             Setlist
           </h3>
           <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-            Version 1.3.0 (Build 2026.11)
+            Version 1.4.0 (Build 2026.11)
           </div>
 
           <div style={{ marginTop: '16px', fontSize: '11.5px' }}>

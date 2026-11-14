@@ -92,8 +92,16 @@ When viewing a song:
 
 ---
 
-## 5. Backups & Disaster Recovery
+## 5. Backups, Spreadsheet Imports & Disaster Recovery
 
+### Spreadsheet Batch Import (Excel & CSV)
+- **Import from File:** Open **Settings** (`⌘,`) → **Library & Backups** → **Import Spreadsheet…** (or choose **File → Import Spreadsheet (Excel / CSV)…**).
+- **Supported Formats:** Microsoft Excel (`.xlsx`, `.xls`), CSV (`.csv`), or TSV (`.tsv`).
+- **Standard Columns:** `Title`, `Artist`, `Key`, `BPM`, `Time Signature`, `Notes`.
+- **Intelligent Fallback:** If Key or BPM are embedded in the title string (e.g. `Thank God I'm Free-E 128`), Setlist extracts the key (`E`) and tempo (`128`) automatically.
+- **Starter Template:** Click **Download Template…** to save a pre-formatted template spreadsheet with sample rows.
+
+### Library Backups
 - **Export Backup:** Open **Settings** (`⌘,`) → **Library & Backups** → **Export Backup File…** to save a `.json` backup file.
 - **Import & Merge:** Click **Import & Merge Backup…** to merge external songs:
   - Local records always take precedence over imported duplicates.

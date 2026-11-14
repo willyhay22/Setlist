@@ -35,6 +35,8 @@ export interface ElectronAPI {
   touchRecentSong: (songId: string) => Promise<void>;
   exportBackup: () => Promise<{ cancelled: boolean; filePath?: string; error?: string }>;
   importBackup: (options: { importPreferences?: boolean }) => Promise<{ cancelled: boolean; result?: ImportResult; error?: string }>;
+  importSpreadsheet: () => Promise<{ cancelled: boolean; result?: ImportResult; error?: string }>;
+  exportTemplate: () => Promise<{ cancelled: boolean; filePath?: string; error?: string }>;
   getSystemTheme: () => Promise<'dark' | 'light'>;
   onSystemThemeChanged: (callback: (theme: 'dark' | 'light') => void) => () => void;
   onRequestClose: (callback: () => void) => () => void;
@@ -74,6 +76,8 @@ const api: ElectronAPI = {
   touchRecentSong: (songId) => ipcRenderer.invoke('store:touchRecentSong', songId),
   exportBackup: () => ipcRenderer.invoke('dialog:exportBackup'),
   importBackup: (options) => ipcRenderer.invoke('dialog:importBackup', options),
+  importSpreadsheet: () => ipcRenderer.invoke('dialog:importSpreadsheet'),
+  exportTemplate: () => ipcRenderer.invoke('dialog:exportTemplate'),
   getSystemTheme: () => ipcRenderer.invoke('theme:getSystem'),
   onSystemThemeChanged: (callback) => {
     const handler = (_: any, theme: 'dark' | 'light') => callback(theme);
