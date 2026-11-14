@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import {
   AppData,
   Song,
+  SongReviewStatus,
   CurrentSetlistEntry,
   Setlist,
   SetlistEntry,
@@ -99,6 +100,7 @@ export class DurableStore {
         hasCompletedTour: false,
         recentSongIds: [],
         dividerWidth: 320,
+        notesHeight: 220,
         purgedSongIds: [],
       },
     };
@@ -114,7 +116,7 @@ export class DurableStore {
       throw new Error(`Unsupported schema version: ${version} (expected <= ${CURRENT_SCHEMA_VERSION})`);
     }
 
-    // Validate songs
+    // Validate songs and provenance reviewStatus
     const songs: Song[] = Array.isArray(data.songs) ? data.songs.map((s: any) => ({
       id: String(s.id || generateId('song')),
       title: String(s.title || '').trim(),
@@ -123,6 +125,10 @@ export class DurableStore {
       musicalKey: String(s.musicalKey || ''),
       timeSignature: String(s.timeSignature || ''),
       notes: typeof s.notes === 'string' ? s.notes : '',
+      reviewStatus: s.reviewStatus && typeof s.reviewStatus === 'object' ? {
+        bpm: s.reviewStatus.bpm === 'default' || s.reviewStatus.bpm === 'reviewed' ? s.reviewStatus.bpm : undefined,
+        timeSignature: s.reviewStatus.timeSignature === 'default' || s.reviewStatus.timeSignature === 'reviewed' ? s.reviewStatus.timeSignature : undefined,
+      } : undefined,
       createdAt: Number(s.createdAt) || Date.now(),
       updatedAt: Number(s.updatedAt) || Date.now(),
       deletedAt: s.deletedAt != null ? Number(s.deletedAt) : null,
@@ -197,6 +203,7 @@ export class DurableStore {
       hasCompletedTour: Boolean(prefs.hasCompletedTour),
       recentSongIds: Array.isArray(prefs.recentSongIds) ? prefs.recentSongIds.filter((id: any) => typeof id === 'string') : [],
       dividerWidth: typeof prefs.dividerWidth === 'number' && prefs.dividerWidth >= 200 && prefs.dividerWidth <= 600 ? prefs.dividerWidth : 320,
+      notesHeight: typeof prefs.notesHeight === 'number' && prefs.notesHeight >= 120 && prefs.notesHeight <= 800 ? prefs.notesHeight : 220,
       windowBounds: prefs.windowBounds && typeof prefs.windowBounds === 'object' ? prefs.windowBounds : undefined,
       purgedSongIds: Array.isArray(prefs.purgedSongIds) ? prefs.purgedSongIds.filter((id: any) => typeof id === 'string') : [],
     };
@@ -288,13 +295,28 @@ export class DurableStore {
 
     const now = Date.now();
 
-    // Practical v1.1 Defaults for a genuinely new song:
+    // Practical v1.2 Defaults for a genuinely new song:
     // BPM defaults to "74" if empty/whitespace
-    const bpm = input.bpm !== undefined && input.bpm.trim() !== '' ? input.bpm.trim() : '74';
+    const bpmRaw = input.bpm !== undefined ? input.bpm.trim() : '';
+    const bpm = bpmRaw !== '' ? bpmRaw : '74';
     // Time Signature defaults to "4/4" if empty/whitespace
-    const timeSignature = input.timeSignature !== undefined && input.timeSignature.trim() !== '' ? input.timeSignature.trim() : '4/4';
+    const tsRaw = input.timeSignature !== undefined ? input.timeSignature.trim() : '';
+    const timeSignature = tsRaw !== '' ? tsRaw : '4/4';
     // Musical Key: unset (empty string)
     const musicalKey = (input.musicalKey || '').trim();
+
+    // Provenance reviewStatus:
+    // If input passed explicit reviewStatus, use it.
+    // Otherwise: untouched default (empty or default 74/4/4) is 'default'.
+    let reviewStatus: SongReviewStatus;
+    if (input.reviewStatus) {
+      reviewStatus = { ...input.reviewStatus };
+    } else {
+      reviewStatus = {
+        bpm: (!bpmRaw || bpmRaw === '74') ? 'default' : 'reviewed',
+        timeSignature: (!tsRaw || tsRaw === '4/4') ? 'default' : 'reviewed',
+      };
+    }
 
     const newSong: Song = {
       id: generateId('song'),
@@ -304,6 +326,7 @@ export class DurableStore {
       musicalKey,
       timeSignature,
       notes: input.notes || '',
+      reviewStatus,
       createdAt: now,
       updatedAt: now,
       deletedAt: null,
@@ -343,8 +366,43 @@ export class DurableStore {
       if (input.bpm !== undefined) s.bpm = input.bpm.trim();
       if (input.musicalKey !== undefined) s.musicalKey = input.musicalKey.trim();
       if (input.timeSignature !== undefined) s.timeSignature = input.timeSignature.trim();
+      if (input.reviewStatus !== undefined) {
+        s.reviewStatus = { ...(s.reviewStatus || {}), ...input.reviewStatus };
+      }
       s.updatedAt = Date.now();
 
+      updatedSong = { ...s };
+      await this.persistDirect(this.memoryData!);
+    });
+
+    return updatedSong!;
+  }
+
+  public async markSongFieldChecked(
+    songId: string,
+    field: 'bpm' | 'timeSignature' | 'both'
+  ): Promise<Song> {
+    let updatedSong: Song | null = null;
+
+    await this.queueWrite(async () => {
+      const s = this.memoryData!.songs.find(item => item.id === songId);
+      if (!s) {
+        throw new Error(`Song not found: ${songId}`);
+      }
+      if (s.deletedAt !== null) {
+        throw new Error(`Cannot update deleted song: ${songId}`);
+      }
+
+      const status: SongReviewStatus = { ...(s.reviewStatus || {}) };
+      if (field === 'bpm' || field === 'both') {
+        status.bpm = 'reviewed';
+      }
+      if (field === 'timeSignature' || field === 'both') {
+        status.timeSignature = 'reviewed';
+      }
+
+      s.reviewStatus = status;
+      s.updatedAt = Date.now();
       updatedSong = { ...s };
       await this.persistDirect(this.memoryData!);
     });
@@ -381,6 +439,7 @@ export class DurableStore {
 
     const now = Date.now();
     // Copy actual data rather than applying new-song defaults!
+    // Inherits pending provenance checks without verifying them!
     const copy: Song = {
       id: generateId('song'),
       title: `${original.title} (Copy)`,
@@ -389,6 +448,7 @@ export class DurableStore {
       musicalKey: original.musicalKey,
       timeSignature: original.timeSignature,
       notes: original.notes,
+      reviewStatus: original.reviewStatus ? { ...original.reviewStatus } : undefined,
       createdAt: now,
       updatedAt: now,
       deletedAt: null,
@@ -681,7 +741,7 @@ export class DurableStore {
     return {
       schemaVersion: CURRENT_SCHEMA_VERSION,
       exportTimestamp: Date.now(),
-      appVersion: '1.1.0',
+      appVersion: '1.2.0',
       songs: state.songs,
       currentSetlist: state.currentSetlist,
       legacySetlists: state.legacySetlists,
@@ -699,8 +759,8 @@ export class DurableStore {
     }
 
     const version = Number(backup.schemaVersion);
-    if (!version || (version !== 1 && version !== CURRENT_SCHEMA_VERSION)) {
-      throw new Error(`Unsupported schema version ${version}. Supported versions are 1 and ${CURRENT_SCHEMA_VERSION}`);
+    if (!version || version < 1 || version > CURRENT_SCHEMA_VERSION) {
+      throw new Error(`Unsupported schema version ${version}. Supported versions are 1 to ${CURRENT_SCHEMA_VERSION}`);
     }
 
     if (!Array.isArray(backup.songs)) {
@@ -741,6 +801,12 @@ export class DurableStore {
           continue;
         }
 
+        const reviewStatus: SongReviewStatus | undefined =
+          rawSong.reviewStatus && typeof rawSong.reviewStatus === 'object' ? {
+            bpm: rawSong.reviewStatus.bpm === 'default' || rawSong.reviewStatus.bpm === 'reviewed' ? rawSong.reviewStatus.bpm : undefined,
+            timeSignature: rawSong.reviewStatus.timeSignature === 'default' || rawSong.reviewStatus.timeSignature === 'reviewed' ? rawSong.reviewStatus.timeSignature : undefined,
+          } : undefined;
+
         const newSong: Song = {
           id: songId,
           title: String(rawSong.title).trim(),
@@ -749,6 +815,7 @@ export class DurableStore {
           musicalKey: String(rawSong.musicalKey || ''),
           timeSignature: String(rawSong.timeSignature || ''),
           notes: typeof rawSong.notes === 'string' ? rawSong.notes : '',
+          reviewStatus,
           createdAt: Number(rawSong.createdAt) || Date.now(),
           updatedAt: Number(rawSong.updatedAt) || Date.now(),
           deletedAt: rawSong.deletedAt != null ? Number(rawSong.deletedAt) : null,

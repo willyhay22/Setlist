@@ -3,6 +3,8 @@ import { useStore } from '../hooks/useStore';
 import { SongDetail } from './SongDetail';
 import { searchSongs } from '../../shared/search';
 import { formatDisplayTitle, formatDisplayArtist } from '../../shared/formatters';
+import { formatSongRowMeta } from '../../shared/keys';
+import { songNeedsChecking, getNeedsCheckingExplanation } from '../../shared/types';
 
 export const LibraryView: React.FC = () => {
   const {
@@ -104,6 +106,9 @@ export const LibraryView: React.FC = () => {
             searchResults.map(({ song, isFuzzy }) => {
               const displayTitle = formatDisplayTitle(song.title);
               const displayArtist = formatDisplayArtist(song.artist);
+              const metaText = formatSongRowMeta(song);
+              const needsChecking = songNeedsChecking(song);
+              const needsExplanation = getNeedsCheckingExplanation(song);
 
               return (
                 <div
@@ -122,6 +127,19 @@ export const LibraryView: React.FC = () => {
                   {displayArtist ? (
                     <div className="song-row-artist">{displayArtist}</div>
                   ) : null}
+                  {(metaText || needsChecking) && (
+                    <div className="song-row-meta">
+                      {metaText ? <span>{metaText}</span> : null}
+                      {needsChecking ? (
+                        <span
+                          className="badge-needs-checking"
+                          title={`Needs checking: ${needsExplanation}`}
+                        >
+                          Needs checking
+                        </span>
+                      ) : null}
+                    </div>
+                  )}
                 </div>
               );
             })

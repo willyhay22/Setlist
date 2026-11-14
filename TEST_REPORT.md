@@ -1,8 +1,8 @@
-# Setlist v1.1 — Verification & Acceptance Test Report
+# Setlist v1.2 — Verification & Acceptance Test Report
 
 **Date:** 2026-11-14  
 **Environment:** macOS (Apple Silicon arm64, Node v26.12.0, Electron 33.4.11)  
-**Test Suite Execution:** 25 automated tests passing (100% pass rate)
+**Test Suite Execution:** 33 automated tests passing across 5 suites (100% pass rate)
 
 ---
 
@@ -10,26 +10,18 @@
 
 | # | Acceptance Criterion | Test Method | Status | Notes |
 | :--- | :--- | :--- | :--- | :--- |
-| **1** | App renamed to Setlist across branding, bundle, dock, window title, and native menus | Packaging & metadata audit | **PASS** | `Setlist.app` generated. `CFBundleDisplayName` and `CFBundleName` set to `Setlist`. Native application menu labeled `Setlist`; song menu labeled `Song`. |
-| **2** | Exact credit `© 2026 William Hay` and version in About panel | Component inspection & menu audit | **PASS** | Verified in `AboutModal.tsx` and native macOS About dialog: displays exact string `© 2026 William Hay`, version 1.1.0, and build 2026.11. |
-| **3** | User data location preserved at `~/Library/Application Support/Studio Songs` | Code audit & store initialization | **PASS** | `app.setPath('userData', path.join(app.getPath('appData'), 'Studio Songs'))` explicitly guarantees the existing database path is preserved. |
-| **4** | Pre-v1.1 migration snapshot created and single setlist migrated | Automated test `store.test.ts` | **PASS** | Stores snapshot `studio_songs_data.pre-v1.1.json`. Migrates active setlist to `currentSetlist` and keeps legacy setlists under `legacySetlists`. |
-| **5** | Song header wrapping fixed: no 1-character vertical columns | CSS & responsive layout verification | **PASS** | Title/artist occupies a dedicated full-width flex column with `word-break: normal; overflow-wrap: break-word;`. Action buttons placed in a separate row beneath. Verified at 780px and 900px window widths. |
-| **6** | Action bar hierarchy: `+ Add to Setlist` and `Edit Details` discoverable; `More ▾` dropdown for secondary actions | Component inspection `SongDetail.tsx` | **PASS** | Action row features direct `+ Add to Setlist`, `Edit Details`, and a `More ▾` button containing `Duplicate Song` and `Delete Song`. |
-| **7** | Refined song list rows with clean hierarchy and no oversized gaps | CSS & component inspection `LibraryView.tsx` | **PASS** | Consistent padding, restrained hover/selected states, graceful title truncation, and clean handling of songs without an artist. |
-| **8** | Song form clean labels and no sample placeholder text | Component inspection `SongFormModal.tsx` | **PASS** | Removed all placeholder examples ("e.g. Living Hope", "e.g. Phil Wickham"). Persistent labels with clean inputs. |
-| **9** | Practical defaults for new songs: BPM 74, Time Signature 4/4, Key Unset | Automated test `store.test.ts` | **PASS** | Verified new songs created with title-only receive `bpm: "74"`, `timeSignature: "4/4"`, `musicalKey: ""`. Keys render as neutral `"Unset"`. |
-| **10** | Smart title casing on blur/save for lowercase inputs while keeping deliberate styling | Automated test `formatters.test.ts` | **PASS** | `gratitude` → `Gratitude`, `brandon lake` → `Brandon Lake`. Deliberate mixed casing like `King of My Heart`, `CCLI`, and `McCartney` are preserved verbatim. |
-| **11** | Duplicating a song copies real values, not new-song defaults | Automated test `store.test.ts` | **PASS** | Cloned song retains original custom key, BPM, and time signature with `(Copy)` appended to title. |
-| **12** | Single persistent Current Setlist replaces multi-setlist collections | Automated test `store.test.ts` & UI audit | **PASS** | Removed "All Setlists", "Create Setlist", and "Recent Setlists". View renders a unified, ordered service list with positions. |
-| **13** | Drag-and-drop and accessible keyboard reordering in Setlist | Component inspection `SetlistView.tsx` | **PASS** | Drag handle reorders entries; accessible `↑` and `↓` buttons allow keyboard-friendly position adjustments. |
-| **14** | Clear Setlist button disabled when empty, confirms with exact prompt, supports 6s Undo | Automated test `store.test.ts` & UI audit | **PASS** | Button disabled if 0 entries. Prompts *"Clear the current setlist? Your songs will stay in the library."* 6-second undo toast restores exact entries and order. |
-| **15** | Non-disruptive search popover on Home and Setlist | Component inspection `Header.tsx` | **PASS** | Invoking search on Home or Setlist renders an anchored popover dropdown directly beneath search input with keyboard navigation and direct `+ Add to Setlist` action. |
-| **16** | Guided tour anchored directly to real controls | Component inspection `GuidedTour.tsx` | **PASS** | Tooltips calculate bounding box of DOM elements (`[data-tour="..."]`) via `getBoundingClientRect()`. Includes Skip, Next, Back, and Finish controls. |
-| **17** | Streamlined Settings modal with tabs: Appearance, Library & Backups, Help & About | Component inspection `SettingsModal.tsx` | **PASS** | In-window modal with tabs. Standard labels ("Settings", "Text size"). Backup export/import and tour replay accessible. |
-| **18** | Backup merge import supports v1 and v2 formats | Automated test `backup.test.ts` | **PASS** | Backward compatible with v1 backups; correctly parses both `currentSetlist` and legacy `setlists` without throwing or data loss. |
-| **19** | Full native macOS menu bar with standard shortcuts | Code audit `main.ts` | **PASS** | Menus for `Setlist`, `File`, `Edit`, `View`, `Song`, `Window`, and `Help` implemented with shortcuts (`⌘N`, `⌘S`, `⌘,`, `⌘W`, `⌘Q`, `⌘⌥←/→`). |
-| **20** | 100% offline guarantee: zero external requests or telemetry | Source audit & CSP | **PASS** | CSP strictly enforces `default-src 'self'`. All icons/fonts are bundled locally. Zero external network calls. |
+| **1** | **Studio-Grade Readability:** Standard size enlarged and unified across Home cards, song rows, search results, picker, selected song title/artist/readouts, and notes. Monotonic progression across Small, Standard, Large, X Large. | CSS scale variables & typography audit | **PASS** | Shared CSS variables (`--text-size-selected-title`, `--text-size-metric-num`, `--text-size-metric-suffix`, `--text-size-row-title`, `--text-size-row-meta`, `--text-size-notes`). Tested at Small, Standard, Large, and X Large with clean monotonic scaling. No blanket zoom. |
+| **2** | **Appearance Live Preview:** Compact live text-size preview in Appearance settings using real song components/tokens without creating records. | Component inspection `SettingsModal.tsx` | **PASS** | Renders dynamic preview card using `.detail-metrics-grid` with dummy song tokens (`D♯ major`, `74 BPM`, and sample arrangement notes). Live updates when switching text size. |
+| **3** | **Key & BPM Dominance:** Readouts restructured from 3 equal cards to 2 dominant cards for Key and BPM. Key root 48–56px, major/minor 18–22px. BPM 48–56px with graceful text wrapping. Time signature rendered as quiet secondary label (`Time: 4/4`). | Automated tests `formatters.test.ts` & CSS audit | **PASS** | Verified with `parseKeyParts`. Key card renders `.metric-value-num` (50px in Standard) and `.metric-value-suffix` (20px). Unset key displays `"Unset"`. BPM card renders 50px number with `overflow-wrap: break-word`. Time signature placed in `.detail-secondary-meta`. |
+| **4** | **Resizable Notes Pane:** Horizontal draggable divider between song info and notes. Notes start compact (~220px). Remembers divider height in preferences. Reset on double-click or Enter. Clamped at limits. Short "Notes" header. | Automated test `store.test.ts` & component inspection `SongDetail.tsx` | **PASS** | Implemented `.notes-horizontal-divider` with pointer capture and keyboard arrow navigation. Persisted in `preferences.notesHeight`. Clamped with `MIN_NOTES_HEIGHT = 120` and `MIN_TOP_HEIGHT = 220`. Reset button and double-click restore 220px default. Header title is `"Notes"`. |
+| **5** | **Compact Key & BPM Beside Songs:** Formatted secondary musical info (`D♯ major · 74 BPM`) across Library, Setlist, Home, Search popover, and Add Songs picker. No stray dots when data missing. | Automated tests `formatters.test.ts` & component audit | **PASS** | `formatSongRowMeta` formats combinations cleanly (`"D♯ major · 74 BPM"`, `"D♯ major"`, `"74 BPM"`, `""`). Integrated across `LibraryView.tsx`, `SetlistView.tsx`, `HomeView.tsx`, `Header.tsx`, and `SongPickerModal.tsx`. |
+| **6** | **Picker Selection Behavior:** Clicking rows in Add Songs picker continues to toggle selection without navigating away. | Component inspection `SongPickerModal.tsx` | **PASS** | Clicking any row in `SongPickerModal` triggers `handleToggle(s.id)` to check/uncheck row. Does not close or trigger view navigation. |
+| **7** | **Copy BPM Only:** One-click copy button on selected song's BPM readout with tooltip and keyboard access. Copies trimmed BPM only (no "BPM", no key, no newlines). Brief "Copied" feedback. Key copying omitted. | Automated test `formatters.test.ts` & component inspection `SongDetail.tsx` | **PASS** | BPM card contains `.metric-copy-btn` with tooltip `"Copy BPM"`. Calls `copyBpmToClipboard` which trims BPM string and writes to clipboard via `clipboard.writeText`. Shows `"Copied"` badge for 2 seconds. Key copying intentionally omitted. Empty BPM disables copy button. |
+| **8** | **Needs Checking Provenance Tracking:** Lightweight per-field provenance (`default` vs `reviewed`) for BPM 74 and 4/4 time signature. | Automated test `store.test.ts` | **PASS** | Schema v3 introduces `SongReviewStatus`. Default values marked `'default'`; manually typed or selected values marked `'reviewed'`. Fresh flags applied on "Save & Add Another". Duplication inherits review status. |
+| **9** | **Calm "Needs Checking" Badge & Actions:** Clear, calm badge on rows and readouts. Accessible "Mark checked" and "Mark both checked" actions. | Automated test `store.test.ts` & component inspection | **PASS** | `.needs-checking-badge` displayed in song rows and `.needs-checking-banner` displayed above readouts. Displays "Mark checked" and "Mark both checked" buttons calling `store:markSongFieldChecked`. |
+| **10** | **Legacy Safety & False Positive Prevention:** Existing songs already in library never retroactively flagged with false-positive warnings. | Automated test `store.test.ts` & `backup.test.ts` | **PASS** | Schema migration from v1/v2 leaves existing song `reviewStatus` as `undefined`. `songNeedsChecking()` returns `false` when status is undefined or reviewed, guaranteeing zero false positives for existing songs. |
+| **11** | **Cleaned Up About Dialog:** Exact single credit `© 2026 William Hay`, version 1.2.0, duplicate native macOS copyright line removed, promotional descriptions deleted. | Packaging audit & component inspection `AboutModal.tsx` | **PASS** | Fixed native `setAboutPanelOptions` in `main.ts` by removing duplicate `credits` field and keeping `copyright: '© 2026 William Hay'`. Verified in `AboutModal.tsx` and `SettingsModal.tsx`. Removed promotional and marketing phrases. |
+| **12** | **Future MIDI & Plugin Investigation Note:** Short, clear repository documentation note outlining confirmed setup, constraints, and non-invasive MIDI bridge principles. | Repository file inspection `FUTURE_MIDI.md` | **PASS** | Created `FUTURE_MIDI.md` documenting confirmed studio equipment (Fender Studio Pro, Waves Tune Real-Time, Korg nanoKONTROL2, Behringer X-Touch), non-invasive MIDI bridge design, official documentation references, and architectural principles. |
 
 ---
 
@@ -37,47 +29,58 @@
 
 ```
 ▶ Setlist v1.1 - Backup & Merge Import Tests
-  ✔ Export backup includes all songs, currentSetlist, legacy recovery data, and preferences (61.50ms)
-  ✔ Merge import: existing local records win, genuinely new songs append, existing setlist kept (38.20ms)
-  ✔ Fresh empty library imports both songs and current setlist from backup (18.17ms)
-  ✔ Backward compatibility: imports v1 backups safely (20.63ms)
-  ✔ Malformed backup is rejected without any mutations (24.25ms)
-✔ Setlist v1.1 - Backup & Merge Import Tests (166.05ms)
+  ✔ Export backup includes all songs, currentSetlist, legacy recovery data, and preferences (52.41ms)
+  ✔ Merge import: existing local records win, genuinely new songs append, existing setlist kept (20.75ms)
+  ✔ Fresh empty library imports both songs and current setlist from backup (12.56ms)
+  ✔ Backward compatibility: imports v1 backups safely (12.85ms)
+  ✔ Backward compatibility: imports v2 backups safely (15.87ms)
+  ✔ Malformed backup is rejected without any mutations (18.33ms)
+✔ Setlist v1.1 - Backup & Merge Import Tests (133.77ms)
 
 ▶ Setlist v1.1 - Smart Capitalization & Formatting Tests
-  ✔ Formats all-lowercase titles to smart title-case (1.86ms)
-  ✔ Formats all-lowercase artist names properly including names like McCartney or O'Connor (0.59ms)
-  ✔ Converts ALL CAPS to Title Case (0.34ms)
-  ✔ Preserves user deliberate mixed-casing, acronyms, and styling without repeated overrides (1.34ms)
-  ✔ Display formatters work non-destructively on raw lowercase data (0.25ms)
-✔ Setlist v1.1 - Smart Capitalization & Formatting Tests (6.29ms)
+  ✔ Formats all-lowercase titles to smart title-case (1.35ms)
+  ✔ Formats all-lowercase artist names properly including names like McCartney or O'Connor (0.10ms)
+  ✔ Converts ALL CAPS to Title Case (0.14ms)
+  ✔ Preserves user deliberate mixed-casing, acronyms, and styling without repeated overrides (0.06ms)
+  ✔ Display formatters work non-destructively on raw lowercase data (0.08ms)
+✔ Setlist v1.1 - Smart Capitalization & Formatting Tests (2.40ms)
+
+▶ Setlist v1.2 - Key & BPM Readout and Meta Tests
+  ✔ parseKeyParts decomposes keys into prominent root and suffix (0.21ms)
+  ✔ formatCompactKey formats unambiguous keys (0.21ms)
+  ✔ formatCompactBpm preserves numbers and free-text without duplicate BPM tokens (0.11ms)
+  ✔ formatSongRowMeta joins key and BPM with middle dot and leaves no stray separators (0.09ms)
+  ✔ songNeedsChecking and helpers identify pending untouched defaults (4.86ms)
+✔ Setlist v1.2 - Key & BPM Readout and Meta Tests (5.73ms)
 
 ▶ Studio Songs - Search Logic Tests
-  ✔ Empty search query returns active songs in creation order (1.51ms)
-  ✔ Search matches active song titles and artists only, ignoring notes and keys (1.10ms)
-  ✔ Fuzzy fallback matches small spelling mistakes only when ordinary matches are 0 (0.79ms)
-  ✔ Arbitrary unrelated query returns 0 matches (0.58ms)
-✔ Studio Songs - Search Logic Tests (14.03ms)
+  ✔ Empty search query returns active songs in creation order (1.33ms)
+  ✔ Search matches active song titles and artists only, ignoring notes and keys (0.32ms)
+  ✔ Fuzzy fallback matches small spelling mistakes only when ordinary matches are 0 (0.28ms)
+  ✔ Arbitrary unrelated query returns 0 matches (0.17ms)
+✔ Studio Songs - Search Logic Tests (3.30ms)
 
 ▶ Setlist v1.1 - Store & Business Logic Tests
-  ✔ Fresh installation starts with empty library and empty currentSetlist (21.74ms)
-  ✔ Title-only creation succeeds with v1.1 defaults (BPM 74, Time Signature 4/4, Key unset) (37.72ms)
-  ✔ New songs append to the bottom; edits do not reorder (69.43ms)
-  ✔ Duplicate warning warns on matching title and artist but allows intentional duplicates (25.52ms)
-  ✔ Metadata updates and note autosaves operate independently (26.51ms)
-  ✔ Asynchronous save guard prevents older stale save from overwriting newer edit (17.70ms)
-  ✔ Duplicate song copies all actual fields without applying new-song defaults (18.52ms)
-  ✔ Deleting song transactionally removes all its occurrences from current setlist (35.90ms)
-  ✔ Thirty-day expiry purges songs and blocks accidental resurrection (21.40ms)
-  ✔ Current Setlist: add, reorder, remove with undo, and clear with undo (54.82ms)
-  ✔ Migration from v1: creates pre-migration snapshot, migrates active setlist to currentSetlist, preserves legacy data (7.80ms)
-✔ Setlist v1.1 - Store & Business Logic Tests (340.41ms)
+  ✔ Fresh installation starts with empty library and empty currentSetlist (10.67ms)
+  ✔ Title-only creation succeeds with v1.1 defaults (BPM 74, Time Signature 4/4, Key unset) (23.26ms)
+  ✔ New songs append to the bottom; edits do not reorder (57.78ms)
+  ✔ Duplicate warning warns on matching title and artist but allows intentional duplicates (24.50ms)
+  ✔ Metadata updates and note autosaves operate independently (23.17ms)
+  ✔ Asynchronous save guard prevents older stale save from overwriting newer edit (14.99ms)
+  ✔ Duplicate song copies all actual fields without applying new-song defaults (14.61ms)
+  ✔ Deleting song transactionally removes all its occurrences from current setlist (25.11ms)
+  ✔ Thirty-day expiry purges songs and blocks accidental resurrection (19.03ms)
+  ✔ Current Setlist: add, reorder, remove with undo, and clear with undo (46.91ms)
+  ✔ Migration from v1: creates pre-migration snapshot, migrates active setlist to currentSetlist, preserves legacy data (10.25ms)
+  ✔ v1.2: Default value provenance and reviewStatus tracking (35.57ms)
+  ✔ v1.2: Vertical notes height preference persists and clamps (8.07ms)
+✔ Setlist v1.1 - Store & Business Logic Tests (315.28ms)
 
-ℹ tests 25
-ℹ suites 4
-ℹ pass 25
+ℹ tests 33
+ℹ suites 5
+ℹ pass 33
 ℹ fail 0
 ℹ cancelled 0
 ℹ skipped 0
-ℹ duration_ms 637.56ms
+ℹ duration_ms 487.99ms
 ```

@@ -34,6 +34,7 @@ export const SongFormModal: React.FC<SongFormModalProps> = ({ mode, song, onClos
     if (song) return song.bpm;
     return '74'; // New song default
   });
+  const [bpmTouched, setBpmTouched] = useState(false);
 
   const [musicalKey, setMusicalKey] = useState(() => {
     if (song) return song.musicalKey;
@@ -50,6 +51,7 @@ export const SongFormModal: React.FC<SongFormModalProps> = ({ mode, song, onClos
     }
     return '4/4'; // New song default: 4/4
   });
+  const [tsTouched, setTsTouched] = useState(false);
 
   const [customTs, setCustomTs] = useState<string>(() => {
     if (song) {
@@ -194,16 +196,22 @@ export const SongFormModal: React.FC<SongFormModalProps> = ({ mode, song, onClos
 
     try {
       if (mode === 'edit' && song) {
+        const updatedReviewStatus = {
+          bpm: bpmTouched ? (bpm.trim() === '' ? 'default' : 'reviewed') : song.reviewStatus?.bpm,
+          timeSignature: tsTouched ? 'reviewed' : song.reviewStatus?.timeSignature,
+        };
+
         await updateSongMetadata(song.id, {
           title: finalTitle,
           artist: finalArtist,
           bpm: bpm.trim(),
           musicalKey,
           timeSignature: finalTs,
+          reviewStatus: updatedReviewStatus,
         });
         onClose();
-      } else {
-        // Create or Duplicate
+      } else if (mode === 'duplicate' && song) {
+        // Inherits source reviewStatus without verifying
         await createSong({
           title: finalTitle,
           artist: finalArtist,
@@ -211,16 +219,41 @@ export const SongFormModal: React.FC<SongFormModalProps> = ({ mode, song, onClos
           musicalKey,
           timeSignature: finalTs,
           notes: notes,
+          reviewStatus: song.reviewStatus ? { ...song.reviewStatus } : undefined,
+        });
+        onClose();
+      } else {
+        // Genuinely new song:
+        // Untouched prefilled BPM (or empty) is 'default'
+        // Untouched preselected 4/4 is 'default'
+        // Deliberately entered or selected is 'reviewed'
+        const bpmTrimmed = bpm.trim();
+        const bpmStatus = (!bpmTouched || bpmTrimmed === '') ? 'default' : 'reviewed';
+        const tsStatus = (!tsTouched || (selectedTsOption === '4/4' && !tsTouched)) ? 'default' : 'reviewed';
+
+        await createSong({
+          title: finalTitle,
+          artist: finalArtist,
+          bpm: bpmTrimmed,
+          musicalKey,
+          timeSignature: finalTs,
+          notes: notes,
+          reviewStatus: {
+            bpm: bpmStatus,
+            timeSignature: tsStatus,
+          },
         });
 
         if (addAnother) {
-          // Reset to clean new-song defaults!
+          // Reset to clean new-song defaults with fresh untouched-default flags!
           setTitle('');
           setArtist('');
           setBpm('74');
+          setBpmTouched(false);
           setMusicalKey('');
           setSelectedTsOption('4/4');
           setCustomTs('');
+          setTsTouched(false);
           setNotes('');
           setDuplicateWarning(null);
           titleInputRef.current?.focus();
@@ -303,7 +336,10 @@ export const SongFormModal: React.FC<SongFormModalProps> = ({ mode, song, onClos
                 type="text"
                 className="form-input"
                 value={bpm}
-                onChange={(e) => setBpm(e.target.value)}
+                onChange={(e) => {
+                  setBpm(e.target.value);
+                  setBpmTouched(true);
+                }}
               />
             </div>
 
@@ -338,7 +374,10 @@ export const SongFormModal: React.FC<SongFormModalProps> = ({ mode, song, onClos
                 id="song-ts-select"
                 className="form-select"
                 value={selectedTsOption}
-                onChange={(e) => setSelectedTsOption(e.target.value)}
+                onChange={(e) => {
+                  setSelectedTsOption(e.target.value);
+                  setTsTouched(true);
+                }}
               >
                 <option value="">Unset</option>
                 {COMMON_TIME_SIGNATURES.map(ts => (
@@ -353,7 +392,10 @@ export const SongFormModal: React.FC<SongFormModalProps> = ({ mode, song, onClos
                   className="form-input"
                   placeholder="e.g. 5/4"
                   value={customTs}
-                  onChange={(e) => setCustomTs(e.target.value)}
+                  onChange={(e) => {
+                    setCustomTs(e.target.value);
+                    setTsTouched(true);
+                  }}
                   style={{ width: '130px' }}
                 />
               )}

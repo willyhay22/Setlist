@@ -2,7 +2,14 @@ export type TextSize = 'small' | 'standard' | 'large' | 'x-large';
 export type ThemePreference = 'system' | 'light' | 'dark';
 
 export const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
-export const CURRENT_SCHEMA_VERSION = 2; // v1.1 single setlist schema
+export const CURRENT_SCHEMA_VERSION = 3; // v1.2 readability, notes resize, and provenance checks
+
+export type FieldProvenance = 'default' | 'reviewed';
+
+export interface SongReviewStatus {
+  bpm?: FieldProvenance;          // 'default' = untouched convenience default, 'reviewed' = entered or verified
+  timeSignature?: FieldProvenance; // 'default' = untouched convenience default, 'reviewed' = entered or verified
+}
 
 export interface Song {
   id: string;
@@ -12,6 +19,7 @@ export interface Song {
   musicalKey: string; // e.g. "C", "C#", "Db", "Am", "F#m", etc.
   timeSignature: string; // "4/4", "3/4", "6/8", or custom
   notes: string;
+  reviewStatus?: SongReviewStatus;
   createdAt: number; // Order index / timestamp
   updatedAt: number;
   deletedAt: number | null; // null if active; ms timestamp when moved to Recently Deleted
@@ -48,6 +56,7 @@ export interface AppPreferences {
   recentSongIds: string[];
   recentSetlistIds?: string[]; // Legacy
   dividerWidth: number;
+  notesHeight?: number; // v1.2 vertical notes pane height in px
   windowBounds?: {
     x?: number;
     y?: number;
@@ -106,4 +115,26 @@ export interface SongInput {
   musicalKey?: string;
   timeSignature?: string;
   notes?: string;
+  reviewStatus?: SongReviewStatus;
+}
+
+export function songNeedsChecking(song?: Song | null): boolean {
+  if (!song || !song.reviewStatus) return false;
+  return song.reviewStatus.bpm === 'default' || song.reviewStatus.timeSignature === 'default';
+}
+
+export function getNeedsCheckingFields(song?: Song | null): ('bpm' | 'timeSignature')[] {
+  if (!song || !song.reviewStatus) return [];
+  const fields: ('bpm' | 'timeSignature')[] = [];
+  if (song.reviewStatus.bpm === 'default') fields.push('bpm');
+  if (song.reviewStatus.timeSignature === 'default') fields.push('timeSignature');
+  return fields;
+}
+
+export function getNeedsCheckingExplanation(song?: Song | null): string {
+  const fields = getNeedsCheckingFields(song);
+  if (fields.length === 2) return 'BPM & Time Signature';
+  if (fields.includes('bpm')) return 'BPM';
+  if (fields.includes('timeSignature')) return 'Time Signature';
+  return '';
 }

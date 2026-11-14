@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { DurableStore } from '../src/main/store';
-import { THIRTY_DAYS_MS } from '../src/shared/types';
+import { CURRENT_SCHEMA_VERSION, THIRTY_DAYS_MS } from '../src/shared/types';
 
 describe('Setlist v1.1 - Store & Business Logic Tests', () => {
   let tempDir: string;
@@ -24,7 +24,7 @@ describe('Setlist v1.1 - Store & Business Logic Tests', () => {
 
   test('Fresh installation starts with empty library and empty currentSetlist', async () => {
     const state = store.getState();
-    assert.strictEqual(state.schemaVersion, 2);
+    assert.strictEqual(state.schemaVersion, CURRENT_SCHEMA_VERSION);
     assert.strictEqual(state.songs.length, 0);
     assert.strictEqual(state.currentSetlist.length, 0);
     assert.strictEqual(state.preferences.hasCompletedTour, false);
@@ -282,7 +282,7 @@ describe('Setlist v1.1 - Store & Business Logic Tests', () => {
     await migratedStore.initialize();
 
     const state = migratedStore.getState();
-    assert.strictEqual(state.schemaVersion, 2);
+    assert.strictEqual(state.schemaVersion, 3);
 
     // Pre-migration snapshot must exist
     const snapshotExists = fs.existsSync(path.join(migrationDir, 'studio_songs_data.pre-v1.1.json'));
@@ -298,8 +298,61 @@ describe('Setlist v1.1 - Store & Business Logic Tests', () => {
     assert.strictEqual(state.legacySetlists?.length, 1);
     assert.strictEqual(state.legacySetlists![0].name, 'test1');
 
+    // Legacy songs must have undefined reviewStatus to prevent flooding with false warnings
+    assert.strictEqual(state.songs[0].reviewStatus, undefined);
+    assert.strictEqual(state.songs[1].reviewStatus, undefined);
+
     try {
       fs.rmSync(migrationDir, { recursive: true, force: true });
     } catch {}
+  });
+
+  test('v1.2: Default value provenance and reviewStatus tracking', async () => {
+    // 1. Untouched title-only creation marks convenience defaults as 'default'
+    const { song: s1 } = await store.createSong({ title: 'Default Song' });
+    assert.strictEqual(s1.bpm, '74');
+    assert.strictEqual(s1.timeSignature, '4/4');
+    assert.strictEqual(s1.reviewStatus?.bpm, 'default');
+    assert.strictEqual(s1.reviewStatus?.timeSignature, 'default');
+
+    // 2. Deliberate user entry marks fields as 'reviewed' even if value is 74 or 4/4
+    const { song: s2 } = await store.createSong({
+      title: 'Reviewed Song',
+      bpm: '74',
+      timeSignature: '4/4',
+      reviewStatus: { bpm: 'reviewed', timeSignature: 'reviewed' },
+    });
+    assert.strictEqual(s2.reviewStatus?.bpm, 'reviewed');
+    assert.strictEqual(s2.reviewStatus?.timeSignature, 'reviewed');
+
+    // 3. Mark checked for BPM
+    const checkedBpm = await store.markSongFieldChecked(s1.id, 'bpm');
+    assert.strictEqual(checkedBpm.reviewStatus?.bpm, 'reviewed');
+    assert.strictEqual(checkedBpm.reviewStatus?.timeSignature, 'default');
+
+    // 4. Mark checked for both
+    const { song: s3 } = await store.createSong({ title: 'Both Default' });
+    const checkedBoth = await store.markSongFieldChecked(s3.id, 'both');
+    assert.strictEqual(checkedBoth.reviewStatus?.bpm, 'reviewed');
+    assert.strictEqual(checkedBoth.reviewStatus?.timeSignature, 'reviewed');
+
+    // 5. Duplication inherits pending reviewStatus without verifying it
+    const { song: s4 } = await store.createSong({
+      title: 'Parent Song',
+      reviewStatus: { bpm: 'default', timeSignature: 'reviewed' },
+    });
+    const dup = await store.duplicateSong(s4.id);
+    assert.strictEqual(dup.reviewStatus?.bpm, 'default');
+    assert.strictEqual(dup.reviewStatus?.timeSignature, 'reviewed');
+  });
+
+  test('v1.2: Vertical notes height preference persists and clamps', async () => {
+    await store.updatePreferences({ notesHeight: 280 });
+    assert.strictEqual(store.getState().preferences.notesHeight, 280);
+
+    // Reload store to verify disk persistence
+    const reloadedStore = new DurableStore(tempDir);
+    await reloadedStore.initialize();
+    assert.strictEqual(reloadedStore.getState().preferences.notesHeight, 280);
   });
 });

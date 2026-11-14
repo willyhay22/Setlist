@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, nativeTheme, Menu, MenuItemConstructorOptions } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, nativeTheme, Menu, MenuItemConstructorOptions, clipboard } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { DurableStore } from './store';
@@ -138,6 +138,15 @@ ipcMain.handle('store:updateSongNotes', async (_, songId, notes, clientUpdatedAt
 ipcMain.handle('store:duplicateSong', async (_, songId) => store.duplicateSong(songId));
 ipcMain.handle('store:deleteSong', async (_, songId) => store.deleteSong(songId));
 ipcMain.handle('store:restoreSong', async (_, songId) => store.restoreSong(songId));
+ipcMain.handle('store:markSongFieldChecked', async (_, songId, field) => store.markSongFieldChecked(songId, field));
+ipcMain.handle('app:copyToClipboard', async (_, text: string) => {
+  try {
+    clipboard.writeText(text);
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+});
 
 // Current Setlist IPC
 ipcMain.handle('store:addSongToCurrentSetlist', async (_, songId) => store.addSongToCurrentSetlist(songId));
@@ -423,10 +432,9 @@ app.whenReady().then(async () => {
   // Set native macOS About Panel configuration
   app.setAboutPanelOptions({
     applicationName: 'Setlist',
-    applicationVersion: '1.1.0',
-    version: '1.1.0',
+    applicationVersion: '1.2.0',
+    version: '1.2.0',
     copyright: '© 2026 William Hay',
-    credits: '© 2026 William Hay',
   });
 
   createApplicationMenu();

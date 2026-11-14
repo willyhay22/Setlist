@@ -61,6 +61,8 @@ interface StoreContextType {
   duplicateSong: (songId: string) => Promise<Song>;
   deleteSong: (songId: string) => Promise<void>;
   restoreSong: (songId: string) => Promise<Song>;
+  markSongFieldChecked: (songId: string, field: 'bpm' | 'timeSignature' | 'both') => Promise<Song>;
+  copyBpmToClipboard: (bpmText: string) => Promise<{ success: boolean; error?: string }>;
 
   // Current Setlist Operations
   addSongToCurrentSetlist: (songId: string) => Promise<CurrentSetlistEntry>;
@@ -253,6 +255,28 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setSelectedSongId(restored.id);
     return restored;
   }, [refreshState]);
+
+  const markSongFieldChecked = useCallback(async (songId: string, field: 'bpm' | 'timeSignature' | 'both') => {
+    const updated = await window.api.markSongFieldChecked(songId, field);
+    await refreshState();
+    return updated;
+  }, [refreshState]);
+
+  const copyBpmToClipboard = useCallback(async (bpmText: string) => {
+    const trimmed = (bpmText || '').trim();
+    if (!trimmed) {
+      return { success: false, error: 'Empty BPM' };
+    }
+    if (window.api && window.api.copyToClipboard) {
+      return await window.api.copyToClipboard(trimmed);
+    }
+    try {
+      await navigator.clipboard.writeText(trimmed);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  }, []);
 
   // Current Setlist operations
   const addSongToCurrentSetlist = useCallback(async (songId: string) => {
@@ -500,6 +524,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         duplicateSong,
         deleteSong,
         restoreSong,
+        markSongFieldChecked,
+        copyBpmToClipboard,
         addSongToCurrentSetlist,
         addMultipleSongsToCurrentSetlist,
         reorderCurrentSetlist,

@@ -17,6 +17,8 @@ export interface ElectronAPI {
   duplicateSong: (songId: string) => Promise<Song>;
   deleteSong: (songId: string) => Promise<void>;
   restoreSong: (songId: string) => Promise<Song>;
+  markSongFieldChecked: (songId: string, field: 'bpm' | 'timeSignature' | 'both') => Promise<Song>;
+  copyToClipboard: (text: string) => Promise<{ success: boolean; error?: string }>;
 
   // Current Setlist
   addSongToCurrentSetlist: (songId: string) => Promise<CurrentSetlistEntry>;
@@ -50,6 +52,8 @@ const api: ElectronAPI = {
   duplicateSong: (songId) => ipcRenderer.invoke('store:duplicateSong', songId),
   deleteSong: (songId) => ipcRenderer.invoke('store:deleteSong', songId),
   restoreSong: (songId) => ipcRenderer.invoke('store:restoreSong', songId),
+  markSongFieldChecked: (songId, field) => ipcRenderer.invoke('store:markSongFieldChecked', songId, field),
+  copyToClipboard: (text) => ipcRenderer.invoke('app:copyToClipboard', text),
 
   addSongToCurrentSetlist: (songId) => ipcRenderer.invoke('store:addSongToCurrentSetlist', songId),
   addMultipleSongsToCurrentSetlist: (songIds) => ipcRenderer.invoke('store:addMultipleSongsToCurrentSetlist', songIds),

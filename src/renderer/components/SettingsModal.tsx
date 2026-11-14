@@ -174,8 +174,41 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, initialTa
                       </button>
                     ))}
                   </div>
-                  <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                    Adjusts both musical readouts and arrangement notes together.
+                  <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '5px', lineHeight: 1.4 }}>
+                    Adjusts song titles, artist names, key and BPM readouts, list rows, search results, and notes. Toolbars and navigation remain comfortably compact.
+                  </div>
+
+                  {/* Compact Live Text-Size Preview (Purely decorative) */}
+                  <div className="text-size-preview-card" aria-label="Text size live preview">
+                    <div className="text-size-preview-header">Live Text-Size Preview</div>
+
+                    <div>
+                      <div className="preview-song-title">Amazing Grace</div>
+                      <div className="preview-song-artist">John Newton</div>
+                    </div>
+
+                    <div className="preview-readouts-row">
+                      <div className="preview-metric-box">
+                        <span className="preview-metric-label">Key</span>
+                        <div className="preview-metric-val">
+                          G <span style={{ fontSize: 'var(--text-size-metric-suffix)', fontWeight: 500, color: 'var(--text-muted)' }}>major</span>
+                        </div>
+                      </div>
+
+                      <div className="preview-metric-box">
+                        <span className="preview-metric-label">BPM</span>
+                        <div className="preview-metric-val">74</div>
+                      </div>
+                    </div>
+
+                    <div className="preview-row-sample">
+                      <div className="song-row-title">Amazing Grace</div>
+                      <div className="song-row-meta">G major · 74 BPM</div>
+                    </div>
+
+                    <div className="preview-notes-sample">
+                      Verse 1: Acoustic intro & vocal lead. Build dynamics into chorus.
+                    </div>
                   </div>
                 </div>
               </div>
@@ -276,7 +309,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, initialTa
                   <div>
                     <h4 style={{ fontSize: '13px', fontWeight: 600 }}>About Setlist</h4>
                     <div style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
-                      Version 1.1.0 • © 2026 William Hay
+                      Version 1.2.0 • © 2026 William Hay
                     </div>
                   </div>
                   <button className="btn" onClick={() => setIsAboutOpen(true)}>

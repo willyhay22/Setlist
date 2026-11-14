@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useStore } from '../hooks/useStore';
 import { SongDetail } from './SongDetail';
 import { SongPickerModal } from './SongPickerModal';
 import { formatDisplayTitle, formatDisplayArtist } from '../../shared/formatters';
+import { formatSongRowMeta } from '../../shared/keys';
+import { songNeedsChecking, getNeedsCheckingExplanation } from '../../shared/types';
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -23,7 +25,45 @@ export const SetlistView: React.FC = () => {
     clearCurrentSetlist,
     prevSetlistSong,
     nextSetlistSong,
+    updatePreferences,
   } = useStore();
+
+  const [dividerWidth, setDividerWidth] = useState<number>(state?.preferences.dividerWidth || 340);
+  const isDraggingRef = useRef(false);
+  const startXRef = useRef(0);
+  const startWidthRef = useRef(dividerWidth);
+
+  useEffect(() => {
+    if (state?.preferences.dividerWidth) {
+      setDividerWidth(state.preferences.dividerWidth);
+    }
+  }, [state?.preferences.dividerWidth]);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    isDraggingRef.current = true;
+    startXRef.current = e.clientX;
+    startWidthRef.current = dividerWidth;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!isDraggingRef.current) return;
+      const delta = moveEvent.clientX - startXRef.current;
+      const newWidth = Math.max(240, Math.min(500, startWidthRef.current + delta));
+      setDividerWidth(newWidth);
+    };
+
+    const handleMouseUp = (upEvent: MouseEvent) => {
+      isDraggingRef.current = false;
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      const delta = upEvent.clientX - startXRef.current;
+      const finalWidth = Math.max(240, Math.min(500, startWidthRef.current + delta));
+      setDividerWidth(finalWidth);
+      updatePreferences({ dividerWidth: finalWidth });
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  };
 
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [draggedEntryId, setDraggedEntryId] = useState<string | null>(null);
@@ -114,7 +154,7 @@ export const SetlistView: React.FC = () => {
   return (
     <div className="main-content" role="region" aria-label="Current Setlist">
       {/* Left Pane: Setlist Running Order */}
-      <div className="split-pane-left" id="tour-setlist-order-pane" style={{ width: '340px' }}>
+      <div className="split-pane-left" id="tour-setlist-order-pane" style={{ width: `${dividerWidth}px` }}>
         <div className="item-list-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
@@ -201,6 +241,9 @@ export const SetlistView: React.FC = () => {
               const isSelected = entry.id === selectedSetlistEntryId;
               const displayTitle = song ? formatDisplayTitle(song.title) : 'Unknown Song';
               const displayArtist = song ? formatDisplayArtist(song.artist) : '';
+              const metaText = song ? formatSongRowMeta(song) : '';
+              const needsChecking = songNeedsChecking(song);
+              const needsExplanation = getNeedsCheckingExplanation(song);
 
               return (
                 <div
@@ -224,14 +267,27 @@ export const SetlistView: React.FC = () => {
                   </span>
 
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div className="song-row-title">
                       {displayTitle}
                     </div>
                     {displayArtist ? (
-                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <div className="song-row-artist">
                         {displayArtist}
                       </div>
                     ) : null}
+                    {(metaText || needsChecking) && (
+                      <div className="song-row-meta">
+                        {metaText ? <span>{metaText}</span> : null}
+                        {needsChecking ? (
+                          <span
+                            className="badge-needs-checking"
+                            title={`Needs checking: ${needsExplanation}`}
+                          >
+                            Needs checking
+                          </span>
+                        ) : null}
+                      </div>
+                    )}
                   </div>
 
                   {/* Accessible move buttons & remove */}
@@ -283,6 +339,15 @@ export const SetlistView: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Draggable Divider */}
+      <div
+        className="split-divider"
+        onMouseDown={handleMouseDown}
+        title="Drag to resize pane"
+        role="separator"
+        aria-orientation="vertical"
+      />
 
       {/* Right Pane: Selected Song Details */}
       <div className="split-pane-right">

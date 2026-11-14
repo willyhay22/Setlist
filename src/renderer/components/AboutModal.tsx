@@ -43,12 +43,8 @@ export const AboutModal: React.FC<AboutModalProps> = ({ onClose }) => {
             Setlist
           </h3>
           <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-            Version 1.1.0 (Build 2026.11)
+            Version 1.2.0 (Build 2026.11)
           </div>
-
-          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '16px', lineHeight: 1.5 }}>
-            A fast, dependable offline musical reference tool and service running order utility for church and studio musicians.
-          </p>
 
           <div style={{ marginTop: '20px', fontSize: '12px', fontWeight: 500, color: 'var(--text-muted)' }}>
             © 2026 William Hay

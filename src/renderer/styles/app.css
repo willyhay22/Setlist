@@ -32,10 +32,15 @@
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
 
-  /* Accessible Text Scaling variables */
-  --text-size-metric-num: 28px;
-  --text-size-metric-label: 11px;
-  --text-size-notes: 15px;
+  /* Accessible Shared Text Scaling variables (Standard baseline, visibly larger than v1.1) */
+  --text-size-selected-title: 26px;
+  --text-size-selected-artist: 16px;
+  --text-size-metric-num: 52px;
+  --text-size-metric-suffix: 20px;
+  --text-size-metric-label: 12px;
+  --text-size-row-title: 18px;
+  --text-size-row-meta: 14.5px;
+  --text-size-notes: 17.5px;
   --line-height-notes: 1.6;
 }
 
@@ -71,32 +76,52 @@
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
 }
 
-/* Text Size Variations */
+/* Text Size Variations with Monotonic Progression */
 body[data-text-size="small"] {
-  --text-size-metric-num: 22px;
-  --text-size-metric-label: 10px;
-  --text-size-notes: 13px;
-  --line-height-notes: 1.5;
+  --text-size-selected-title: 22px;
+  --text-size-selected-artist: 14px;
+  --text-size-metric-num: 42px;
+  --text-size-metric-suffix: 16px;
+  --text-size-metric-label: 11px;
+  --text-size-row-title: 15px;
+  --text-size-row-meta: 13px;
+  --text-size-notes: 15px;
+  --line-height-notes: 1.55;
 }
 
 body[data-text-size="standard"] {
-  --text-size-metric-num: 28px;
-  --text-size-metric-label: 11px;
-  --text-size-notes: 15px;
+  --text-size-selected-title: 26px;
+  --text-size-selected-artist: 16px;
+  --text-size-metric-num: 52px;
+  --text-size-metric-suffix: 20px;
+  --text-size-metric-label: 12px;
+  --text-size-row-title: 18px;
+  --text-size-row-meta: 14.5px;
+  --text-size-notes: 17.5px;
   --line-height-notes: 1.6;
 }
 
 body[data-text-size="large"] {
-  --text-size-metric-num: 34px;
-  --text-size-metric-label: 12px;
-  --text-size-notes: 18px;
+  --text-size-selected-title: 30px;
+  --text-size-selected-artist: 18px;
+  --text-size-metric-num: 60px;
+  --text-size-metric-suffix: 24px;
+  --text-size-metric-label: 13px;
+  --text-size-row-title: 21px;
+  --text-size-row-meta: 16.5px;
+  --text-size-notes: 20px;
   --line-height-notes: 1.65;
 }
 
 body[data-text-size="x-large"] {
-  --text-size-metric-num: 40px;
-  --text-size-metric-label: 13px;
-  --text-size-notes: 22px;
+  --text-size-selected-title: 34px;
+  --text-size-selected-artist: 20px;
+  --text-size-metric-num: 68px;
+  --text-size-metric-suffix: 28px;
+  --text-size-metric-label: 14px;
+  --text-size-row-title: 24px;
+  --text-size-row-meta: 18.5px;
+  --text-size-notes: 23px;
   --line-height-notes: 1.7;
 }
 
@@ -371,8 +396,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 
 .song-row-title {
-  font-size: 13.5px;
-  font-weight: 500;
+  font-size: var(--text-size-row-title);
+  font-weight: 600;
   color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -381,16 +406,26 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
 .song-row.selected .song-row-title {
   color: var(--text-selected);
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .song-row-artist {
-  font-size: 12px;
+  font-size: var(--text-size-row-meta);
   color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   margin-top: 2px;
+}
+
+.song-row-meta {
+  font-size: var(--text-size-row-meta);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 3px;
 }
 
 .fuzzy-tag {
@@ -416,8 +451,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .song-header-fixed {
   padding: 14px 18px;
   background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
+  overflow-y: auto;
 }
 
 .song-header-title-block {
@@ -426,10 +461,18 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 
 .song-title-display {
-  font-size: 20px;
+  font-size: var(--text-size-selected-title);
   font-weight: 700;
   color: var(--text-primary);
   line-height: 1.25;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+.song-artist-display {
+  font-size: var(--text-size-selected-artist);
+  color: var(--text-secondary);
+  margin-top: 4px;
   overflow-wrap: break-word;
   word-break: normal;
 }
@@ -496,21 +539,30 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   margin: 4px 0;
 }
 
-/* Prominent Musical Readout Cards */
+/* Prominent Key and BPM Readouts + Secondary Time Signature */
 .musical-readouts {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  display: flex;
   gap: 12px;
-  margin-top: 14px;
+  margin-top: 12px;
 }
 
 .readout-card {
+  flex: 1 1 0;
+  min-width: 0;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
-  padding: 10px 12px;
+  padding: 10px 14px;
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
+}
+
+.readout-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .readout-label {
@@ -521,44 +573,226 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   color: var(--text-muted);
 }
 
-.readout-value {
+.key-readout-body {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.key-root {
   font-size: var(--text-size-metric-num);
   font-weight: 700;
   color: var(--text-primary);
-  margin-top: 3px;
-  line-height: 1.15;
-  word-break: break-word;
+  line-height: 1.1;
 }
 
-.readout-value.unset {
+.key-suffix {
+  font-size: var(--text-size-metric-suffix);
+  font-weight: 500;
   color: var(--text-muted);
-  font-weight: 400;
-  font-size: 20px;
 }
 
-/* Scrollable Notes Area */
+.bpm-readout-body {
+  margin-top: 4px;
+}
+
+.bpm-value {
+  font-size: var(--text-size-metric-num);
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.1;
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+
+.btn-copy-bpm {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-copy-bpm:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+.btn-copy-bpm.copied {
+  background: var(--success-bg);
+  color: var(--success-color);
+  border-color: var(--success-color);
+}
+
+.btn-copy-bpm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Secondary Time Signature Bar */
+.time-signature-secondary-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+  padding: 6px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+}
+
+.time-sig-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.time-sig-label {
+  font-size: var(--text-size-metric-label);
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+}
+
+.time-sig-val {
+  font-weight: 600;
+  font-size: 13.5px;
+  color: var(--text-primary);
+}
+
+/* Needs Checking Indicators */
+.needs-checking-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.badge-needs-checking {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--warning-color);
+  background: var(--warning-bg);
+  border: 1px solid rgba(217, 119, 6, 0.3);
+  padding: 1px 6px;
+  border-radius: 4px;
+  text-transform: none;
+}
+
+.btn-mark-checked {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 4px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-mark-checked:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+/* Horizontal Drag Divider Between Song Info and Notes */
+.notes-horizontal-divider {
+  height: 10px;
+  cursor: row-resize;
+  background: var(--bg-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  user-select: none;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+  outline: none;
+}
+
+.notes-horizontal-divider:hover,
+.notes-horizontal-divider:focus-visible {
+  background: var(--bg-hover);
+  border-top-color: var(--accent-color);
+}
+
+.notes-horizontal-divider.dragging {
+  background: var(--accent-light);
+  border-top-color: var(--accent-color);
+}
+
+.notes-divider-grip {
+  width: 38px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border-strong);
+}
+
+/* Resizable Notes Area */
 .notes-container {
-  flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 16px 20px;
+  padding: 12px 18px 16px 18px;
   overflow: hidden;
+  background: var(--bg-secondary);
+  flex-shrink: 0;
 }
 
 .notes-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   flex-shrink: 0;
 }
 
+.notes-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .notes-header-title {
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--text-muted);
+}
+
+.notes-reset-btn {
+  background: transparent;
+  border: none;
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 1px 4px;
+  border-radius: 3px;
+  text-decoration: underline;
+}
+
+.notes-reset-btn:hover {
+  color: var(--text-primary);
 }
 
 .notes-save-status {
@@ -1012,4 +1246,84 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   color: var(--text-primary);
   font-weight: 600;
   box-shadow: var(--shadow-sm);
+}
+
+/* Appearance Tab Live Text-Size Preview Card */
+.text-size-preview-card {
+  margin-top: 14px;
+  padding: 14px 16px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.text-size-preview-header {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+}
+
+.preview-song-title {
+  font-size: var(--text-size-selected-title);
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.25;
+}
+
+.preview-song-artist {
+  font-size: var(--text-size-selected-artist);
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.preview-readouts-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.preview-metric-box {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 8px 12px;
+  flex: 1;
+}
+
+.preview-metric-label {
+  font-size: var(--text-size-metric-label);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.preview-metric-val {
+  font-size: var(--text-size-metric-num);
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.1;
+  margin-top: 2px;
+}
+
+.preview-row-sample {
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+}
+
+.preview-notes-sample {
+  font-size: var(--text-size-notes);
+  line-height: var(--line-height-notes);
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-family: inherit;
 }

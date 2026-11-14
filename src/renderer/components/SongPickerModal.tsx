@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useStore } from '../hooks/useStore';
 import { searchSongs } from '../../shared/search';
 import { formatDisplayTitle, formatDisplayArtist } from '../../shared/formatters';
+import { formatSongRowMeta } from '../../shared/keys';
+import { songNeedsChecking, getNeedsCheckingExplanation } from '../../shared/types';
 import { SearchIcon, CloseIcon, CheckIcon } from './Icons';
 
 interface SongPickerModalProps {
@@ -72,6 +74,9 @@ export const SongPickerModal: React.FC<SongPickerModalProps> = ({ onClose }) => 
               const isSelected = selectedIds.includes(song.id);
               const displayTitle = formatDisplayTitle(song.title);
               const displayArtist = formatDisplayArtist(song.artist);
+              const metaText = formatSongRowMeta(song);
+              const needsChecking = songNeedsChecking(song);
+              const needsExplanation = getNeedsCheckingExplanation(song);
 
               return (
                 <div
@@ -91,14 +96,27 @@ export const SongPickerModal: React.FC<SongPickerModalProps> = ({ onClose }) => 
                   }}
                 >
                   <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ fontWeight: 600, fontSize: '13.5px', color: 'var(--text-primary)' }}>
+                    <div className="song-row-title">
                       {displayTitle}
                     </div>
                     {displayArtist ? (
-                      <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                      <div className="song-row-artist">
                         {displayArtist}
                       </div>
                     ) : null}
+                    {(metaText || needsChecking) && (
+                      <div className="song-row-meta">
+                        {metaText ? <span>{metaText}</span> : null}
+                        {needsChecking ? (
+                          <span
+                            className="badge-needs-checking"
+                            title={`Needs checking: ${needsExplanation}`}
+                          >
+                            Needs checking
+                          </span>
+                        ) : null}
+                      </div>
+                    )}
                   </div>
 
                   <div

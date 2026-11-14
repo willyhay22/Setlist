@@ -23,16 +23,22 @@ describe('Setlist v1.1 - Backup & Merge Import Tests', () => {
   });
 
   test('Export backup includes all songs, currentSetlist, legacy recovery data, and preferences', async () => {
-    const { song: s1 } = await store.createSong({ title: 'Song 1', artist: 'Artist 1' });
+    const { song: s1 } = await store.createSong({
+      title: 'Song 1',
+      artist: 'Artist 1',
+      reviewStatus: { bpm: 'default', timeSignature: 'reviewed' },
+    });
     const { song: s2 } = await store.createSong({ title: 'Song 2', artist: 'Artist 2' });
     await store.deleteSong(s2.id); // soft-deleted
 
     await store.addSongToCurrentSetlist(s1.id);
-    await store.updatePreferences({ textSize: 'large', theme: 'dark' });
+    await store.updatePreferences({ textSize: 'large', theme: 'dark', notesHeight: 250 });
 
     const backup = store.exportBackup();
-    assert.strictEqual(backup.schemaVersion, 2);
+    assert.strictEqual(backup.schemaVersion, 3);
     assert.strictEqual(backup.songs.length, 2);
+    assert.strictEqual(backup.songs[0].reviewStatus?.bpm, 'default');
+    assert.strictEqual(backup.songs[0].reviewStatus?.timeSignature, 'reviewed');
     assert.strictEqual(backup.currentSetlist.length, 1);
     assert.strictEqual(backup.preferences?.textSize, 'large');
     assert.strictEqual(backup.preferences?.theme, 'dark');
@@ -178,6 +184,41 @@ describe('Setlist v1.1 - Backup & Merge Import Tests', () => {
 
     const state = store.getState();
     assert.strictEqual(state.songs.some(s => s.id === 'v1_song'), true);
+    // Legacy songs must have undefined reviewStatus
+    assert.strictEqual(state.songs.find(s => s.id === 'v1_song')?.reviewStatus, undefined);
+  });
+
+  test('Backward compatibility: imports v2 backups safely', async () => {
+    const v2Backup = {
+      schemaVersion: 2,
+      exportTimestamp: Date.now(),
+      appVersion: '1.1.0',
+      songs: [
+        {
+          id: 'v2_song',
+          title: 'V2 Song',
+          artist: 'V2 Artist',
+          bpm: '74',
+          musicalKey: 'D',
+          timeSignature: '4/4',
+          notes: '',
+          createdAt: 300,
+          updatedAt: 300,
+          deletedAt: null,
+        },
+      ],
+      currentSetlist: [
+        { id: 'v2_entry', songId: 'v2_song', position: 0 },
+      ],
+    };
+
+    const res = await store.importBackup(v2Backup);
+    assert.strictEqual(res.success, true);
+    assert.strictEqual(res.addedSongsCount, 1);
+
+    const state = store.getState();
+    assert.strictEqual(state.songs.some(s => s.id === 'v2_song'), true);
+    assert.strictEqual(state.songs.find(s => s.id === 'v2_song')?.reviewStatus, undefined);
   });
 
   test('Malformed backup is rejected without any mutations', async () => {

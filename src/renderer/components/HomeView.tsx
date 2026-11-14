@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useStore } from '../hooks/useStore';
 import { PlusIcon, MusicIcon, ListIcon, ChevronRightIcon } from './Icons';
-import { formatKeyDisplay } from '../../shared/keys';
 import { formatDisplayTitle, formatDisplayArtist } from '../../shared/formatters';
+import { formatSongRowMeta } from '../../shared/keys';
+import { songNeedsChecking, getNeedsCheckingExplanation } from '../../shared/types';
 import { SongPickerModal } from './SongPickerModal';
 
 export const HomeView: React.FC = () => {
@@ -81,6 +82,9 @@ export const HomeView: React.FC = () => {
                 const song = state?.songs.find(s => s.id === entry.songId);
                 const title = song ? formatDisplayTitle(song.title) : 'Unknown Song';
                 const artist = song ? formatDisplayArtist(song.artist) : '';
+                const metaText = song ? formatSongRowMeta(song) : '';
+                const needsChecking = songNeedsChecking(song);
+                const needsExplanation = getNeedsCheckingExplanation(song);
 
                 return (
                   <div
@@ -89,34 +93,39 @@ export const HomeView: React.FC = () => {
                     style={{
                       display: 'flex',
                       alignItems: 'center',
-                      padding: '6px 8px',
+                      padding: '8px 10px',
                       borderRadius: '6px',
                       cursor: 'pointer',
                       background: 'var(--bg-primary)',
                       gap: '10px',
                     }}
                   >
-                    <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', width: '16px' }}>
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', width: '18px' }}>
                       {idx + 1}.
                     </span>
-                    <span style={{ fontWeight: 500, fontSize: '13px', color: 'var(--text-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {title}
-                    </span>
-                    {artist ? (
-                      <span style={{ fontSize: '11.5px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '140px' }}>
-                        {artist}
-                      </span>
-                    ) : null}
-                    {song?.musicalKey ? (
-                      <span style={{ fontSize: '10.5px', background: 'var(--bg-tertiary)', padding: '1px 5px', borderRadius: '3px', color: 'var(--text-secondary)' }}>
-                        {formatKeyDisplay(song.musicalKey)}
-                      </span>
-                    ) : null}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div className="song-row-title">
+                        {title}
+                      </div>
+                      <div className="song-row-meta" style={{ marginTop: '2px' }}>
+                        {artist ? <span style={{ color: 'var(--text-muted)' }}>{artist}</span> : null}
+                        {artist && metaText ? <span style={{ color: 'var(--text-muted)' }}>·</span> : null}
+                        {metaText ? <span>{metaText}</span> : null}
+                        {needsChecking ? (
+                          <span
+                            className="badge-needs-checking"
+                            title={`Needs checking: ${needsExplanation}`}
+                          >
+                            Needs checking
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
                   </div>
                 );
               })}
               {entries.length > 5 && (
-                <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', textAlign: 'center', marginTop: '4px' }}>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', marginTop: '6px' }}>
                   + {entries.length - 5} more song{entries.length - 5 === 1 ? '' : 's'} in service order
                 </div>
               )}
@@ -183,6 +192,9 @@ export const HomeView: React.FC = () => {
             {recentSongs.map((song) => {
               const displayTitle = formatDisplayTitle(song!.title);
               const displayArtist = formatDisplayArtist(song!.artist);
+              const metaText = formatSongRowMeta(song!);
+              const needsChecking = songNeedsChecking(song!);
+              const needsExplanation = getNeedsCheckingExplanation(song!);
 
               return (
                 <div
@@ -194,33 +206,32 @@ export const HomeView: React.FC = () => {
                   onKeyDown={(e) => e.key === 'Enter' && handleOpenSong(song!.id)}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <MusicIcon size={15} style={{ color: 'var(--accent-color)', flexShrink: 0 }} />
+                    <MusicIcon size={16} style={{ color: 'var(--accent-color)', flexShrink: 0 }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 600, fontSize: '13.5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <div className="song-row-title">
                         {displayTitle}
                       </div>
                       {displayArtist ? (
-                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <div className="song-row-artist">
                           {displayArtist}
                         </div>
                       ) : null}
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', gap: '8px', marginTop: '8px', fontSize: '11.5px', color: 'var(--text-secondary)' }}>
-                    {song!.musicalKey ? (
-                      <span style={{ background: 'var(--bg-tertiary)', padding: '2px 6px', borderRadius: '4px' }}>
-                        Key: {formatKeyDisplay(song!.musicalKey)}
-                      </span>
-                    ) : null}
-                    {song!.bpm ? (
-                      <span style={{ background: 'var(--bg-tertiary)', padding: '2px 6px', borderRadius: '4px' }}>
-                        BPM: {song!.bpm}
-                      </span>
-                    ) : null}
+                  <div className="song-row-meta" style={{ marginTop: '8px' }}>
+                    {metaText ? <span>{metaText}</span> : null}
                     {song!.timeSignature ? (
-                      <span style={{ background: 'var(--bg-tertiary)', padding: '2px 6px', borderRadius: '4px' }}>
-                        {song!.timeSignature}
+                      <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
+                        ({song!.timeSignature})
+                      </span>
+                    ) : null}
+                    {needsChecking ? (
+                      <span
+                        className="badge-needs-checking"
+                        title={`Needs checking: ${needsExplanation}`}
+                      >
+                        Needs checking
                       </span>
                     ) : null}
                   </div>

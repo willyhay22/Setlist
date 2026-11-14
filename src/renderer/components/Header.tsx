@@ -3,6 +3,8 @@ import { useStore } from '../hooks/useStore';
 import { HomeIcon, MusicIcon, ListIcon, SearchIcon, PlusIcon, SettingsIcon, CloseIcon, CheckIcon } from './Icons';
 import { searchSongs } from '../../shared/search';
 import { formatDisplayTitle, formatDisplayArtist } from '../../shared/formatters';
+import { formatSongRowMeta } from '../../shared/keys';
+import { songNeedsChecking, getNeedsCheckingExplanation } from '../../shared/types';
 
 export const Header: React.FC = () => {
   const {
@@ -227,6 +229,9 @@ export const Header: React.FC = () => {
                 const isJustAdded = addedSongId === song.id;
                 const displayTitle = formatDisplayTitle(song.title);
                 const displayArtist = formatDisplayArtist(song.artist);
+                const metaText = formatSongRowMeta(song);
+                const needsChecking = songNeedsChecking(song);
+                const needsExplanation = getNeedsCheckingExplanation(song);
 
                 return (
                   <div
@@ -237,15 +242,28 @@ export const Header: React.FC = () => {
                     aria-selected={isFocused}
                   >
                     <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <div className="song-row-title">
                         {displayTitle}
                         {isFuzzy && <span className="fuzzy-tag">Close match</span>}
                       </div>
                       {displayArtist ? (
-                        <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <div className="song-row-artist">
                           {displayArtist}
                         </div>
                       ) : null}
+                      {(metaText || needsChecking) && (
+                        <div className="song-row-meta">
+                          {metaText ? <span>{metaText}</span> : null}
+                          {needsChecking ? (
+                            <span
+                              className="badge-needs-checking"
+                              title={`Needs checking: ${needsExplanation}`}
+                            >
+                              Needs checking
+                            </span>
+                          ) : null}
+                        </div>
+                      )}
                     </div>
 
                     <button
