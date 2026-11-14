@@ -6,6 +6,7 @@ import { COMMON_TIME_SIGNATURES } from '../../shared/timeSignatures';
 import { normalizeSearch } from '../../shared/search';
 import { smartTitleCase } from '../../shared/formatters';
 import { CloseIcon } from './Icons';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 interface SongFormModalProps {
   mode: 'create' | 'edit' | 'duplicate';
@@ -72,6 +73,8 @@ export const SongFormModal: React.FC<SongFormModalProps> = ({ mode, song, onClos
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
 
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, true);
   const titleInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -269,11 +272,13 @@ export const SongFormModal: React.FC<SongFormModalProps> = ({ mode, song, onClos
   return (
     <div className="modal-overlay" onClick={handleCancel}>
       <div
+        ref={dialogRef}
         className="modal-dialog"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-labelledby="song-form-title"
+        tabIndex={-1}
       >
         <div className="modal-header">
           <h3 id="song-form-title">

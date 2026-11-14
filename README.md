@@ -1,109 +1,93 @@
-# Setlist (v1.2)
+# Setlist (v1.3.0)
 
 **Setlist** is a lightweight, reliable, 100% offline macOS desktop application designed as a fast musical reference and service running-order tool for studio and church production environments alongside DAWs such as Fender Studio Pro.
 
 ---
 
-## 1. Architecture & Design Decisions
+## 1. Overview & Capabilities
 
-### Technology Stack
-- **Desktop Runtime:** Electron 33 (macOS arm64 standalone app bundle `Setlist.app`)
-- **UI Architecture:** React 18 + TypeScript + Vite
-- **Styling:** Native macOS San Francisco typography, responsive dual-theme (Light & Dark appearance matching system preferences dynamically), and accessible shared text-size scaling.
-- **Storage Architecture:** Durable local JSON store with POSIX atomic write-swap (`.tmp` write + `fsyncSync` + atomic `fs.renameSync`), versioned schema migration (v1 → v2 → v3), automatic pre-migration snapshotting (`studio_songs_data.pre-v1.1.json`), and rollback snapshots.
-- **Offline & Security Guarantee:** Zero CDN assets, zero remote analytics, zero update checks, disabled remote navigation (`will-navigate` denied), isolated context bridge (`contextIsolation: true`, `nodeIntegration: false`), and strict offline Content Security Policy.
-
-### Storage Locations & Data Preservation
-All app data is persisted outside the app bundle and development directory:
-- **Primary Data Store:** `~/Library/Application Support/Studio Songs/studio_songs_data.json` *(preserved under the established path so updates never lose user data)*
-- **Pre-v1.1 Migration Snapshot:** `~/Library/Application Support/Studio Songs/studio_songs_data.pre-v1.1.json`
-- **Rollback Snapshot:** `~/Library/Application Support/Studio Songs/studio_songs_data.backup.json`
-- **Window Geometry & Preferences:** `~/Library/Application Support/Studio Songs/window-state.json`
+- **Offline-First Reference:** Zero cloud sync, zero telemetry, zero analytics, zero external network requests.
+- **Manual Musical Details:** Manually enter song title, artist, key, tempo (BPM), time signature, and arrangement notes.
+- **Studio-Grade Readability:** Large, high-contrast Key root (48–56px) and BPM (48–56px) with distinct secondary major/minor designations and supporting time signature. Standard text scaling is optimized for arm's length reading from a studio console seat.
+- **Copy BPM Only:** One-click copy button on selected songs that copies strictly trimmed tempo numbers or notation directly to the clipboard for instant DAW transport entry.
+- **Default Provenance Tracking:** Unreviewed convenience defaults (BPM 74, 4/4) display a calm "Needs checking" badge with one-click verification. Existing libraries are protected against retroactive false positives.
+- **Single Reusable Setlist:** Build, arrange, drag-and-drop, or keyboard-reorder your service running order with step navigation (`⌘⌥←` / `⌘⌥→`) and safe undo.
+- **Resizable Notes:** Horizontal draggable divider between song information and arrangement notes with durable height persistence in preferences.
+- **Original macOS Icon & Motion:** Tasteful, restrained setlist icon and subtle macOS motion with full Reduce Motion accessibility support.
 
 ---
 
-## 2. Quick Installation & Launch
+## 2. System Requirements & Compatibility
 
-### Run Directly or Install to Applications
-The application has been fully compiled and packaged into a standalone macOS arm64 application:
+- **Supported Architecture:** Apple Silicon (`arm64` — M1, M2, M3, M4 Macs). *Intel (`x86_64`) can be compiled from source.*
+- **Operating System:** macOS 10.15 Catalina or higher (macOS 11 Big Sur or newer recommended for Apple Silicon). Tested on macOS 14 Sonoma / macOS 15 Sequoia.
+- **Signing & Gatekeeper Status:** Ad-hoc signed (`codesign -s -`).
+  > **Note on Gatekeeper:** Because this release is not signed with an Apple Developer ID distribution certificate, macOS may show a prompt stating that Apple could not verify the developer on first launch. To open:
+  > 1. In **Finder**, right-click (or Control-click) `Setlist.app`.
+  > 2. Select **Open** from the context menu.
+  > 3. Click **Open** in the confirmation dialog. Setlist will launch normally thereafter.
 
-```bash
-# Option A: Launch directly from the build output
-open "/Users/wihay/Dev/studio-songs/release/mac-arm64/Setlist.app"
+---
 
-# Option B: Copy to /Applications (or ~/Applications)
-cp -R "/Users/wihay/Dev/studio-songs/release/mac-arm64/Setlist.app" /Applications/
-open "/Applications/Setlist.app"
+## 3. Installation & Downloads
+
+Pre-built binaries are prepared locally and can be published to GitHub Releases:
+
+- **Apple Silicon Disk Image (DMG):** `release/Setlist-1.3.0-arm64.dmg`  
+  *(Double-click the DMG and drag Setlist to `/Applications`)*
+- **Apple Silicon Application Archive (ZIP):** `release/Setlist-1.3.0-arm64.zip`  
+  *(Unzip and move `Setlist.app` to `/Applications`)*
+- **Integrity Checksums:** SHA-256 checksums are recorded in [`release/SHA256SUMS.txt`](file:///Users/wihay/Dev/studio-songs/release/SHA256SUMS.txt).
+
+### Data Storage & Preservation
+Every fresh installation with no prior data starts with an empty library. User data is stored durably outside the app bundle and repository at:
 ```
-
-Once copied to `/Applications`, Setlist appears in Spotlight, Launchpad, and can be pinned to your macOS Dock.
+~/Library/Application Support/Studio Songs/studio_songs_data.json
+```
+Updating the application preserves existing songs, notes, running orders, and preferences.
 
 ---
 
-## 3. Building From Source
+## 4. Building & Testing From Source
 
+### Prerequisites
+- macOS with Node.js 20 or 22 LTS
+- Git
+
+### Build Commands
 ```bash
-cd /Users/wihay/Dev/studio-songs
+git clone <repository-url>
+cd studio-songs
 
-# Run unit tests (33 automated unit tests across 5 test suites)
+# Install exact dependencies
+npm ci
+
+# Run automated test suites (33 unit tests across 5 suites)
 npm test
 
-# Build production web assets & Electron TypeScript
+# Build production bundle (renderer & electron)
 npm run build
 
-# Package standalone macOS application bundle
+# Package standalone macOS application (directory)
 npm run package
+
+# Package installer DMG and standalone ZIP
+npm run package:dmg
+npm run package:zip
 ```
 
 ---
 
-## 4. Key Capabilities & What's New in v1.2
+## 5. Documentation & Resources
 
-1. **Studio-Grade Readability (Standard Size):**
-   - The `Standard` text size is visibly enlarged and unified across the entire app so it can be comfortably read from a studio console seat at arms length.
-   - Applies consistently across Home cards, Library & Setlist song rows, search results, Add Songs picker, selected song title/artist, musical readouts, and arrangement notes.
-   - Smooth, monotonic progression across `Small`, `Standard`, `Large`, and `X Large` without blanket browser zoom (maintaining crisp UI controls and toolbars).
-   - Live interactive text-size preview in **Settings** (`⌘,`) → **Appearance**.
+- [User Guide](file:///Users/wihay/Dev/studio-songs/USER_GUIDE.md): Detailed workflow walkthrough, keyboard shortcuts, and backup/restore guide.
+- [Changelog](file:///Users/wihay/Dev/studio-songs/CHANGELOG.md): Complete release history from v1.0.0 to v1.3.0.
+- [Verification Test Report](file:///Users/wihay/Dev/studio-songs/TEST_REPORT.md): Automated and visual test verification results.
+- [Future MIDI Investigation Note](file:///Users/wihay/Dev/studio-songs/FUTURE_MIDI.md): Architectural notes regarding future DAW/MIDI controllers (Korg nanoKONTROL2, Behringer X-Touch) — *no MIDI features are active in current versions*.
+- [Bug Report Template](file:///Users/wihay/Dev/studio-songs/.github/ISSUE_TEMPLATE/bug_report.md): Issue template for reporting bugs with system information.
 
-2. **Dominant Key & BPM Hierarchy:**
-   - Musical details are rearranged from three equal cards to two dominant visual focal points: **Key** and **BPM**.
-   - **Key Readout:** Large root note (48–56px) with distinct secondary major/minor designation (18–22px). Unset key clearly reads `"Unset"`.
-   - **BPM Readout:** High-visibility tempo number (48–56px) that wraps gracefully when descriptive tempo notation is used (e.g., `72 verse, 76 chorus`).
-   - **Time Signature:** Presented as a quiet, secondary label (`Time: 4/4`) directly under the readouts rather than competing for primary visual weight.
+---
 
-3. **Resizable Arrangement Notes:**
-   - Added a horizontal draggable resizer bar between the song info / musical readouts and the arrangement notes pane.
-   - Notes start in a compact lower pane (default height: 220px) allowing maximum room for song details.
-   - Drag smoothly or use keyboard navigation (`↑`/`↓` arrows on the divider) to resize.
-   - Double-click the resizer bar or press `Enter`/`Space` while focused to reset to the default 220px height.
-   - Custom notes height is persisted durably in user preferences (`preferences.notesHeight`).
-   - Clamped with sensible minimums (minimum 120px notes pane, minimum 220px top pane).
+## 6. License Status
 
-4. **Compact Key & BPM Across Lists:**
-   - Song rows in the Library, Current Setlist, Home screen recent/setlist previews, Search popover, and Add Songs picker now display clear, compact musical metadata (e.g., `D♯ major · 74 BPM`).
-   - Clean formatting logic eliminates stray dots or separators when key or BPM is blank.
-   - In the Add Songs picker, clicking anywhere on a row toggles selection without navigating away.
-
-5. **Copy BPM Only:**
-   - Dedicated **Copy BPM** button on the selected song's BPM readout (and keyboard-accessible with `Enter` or `Space`).
-   - Copies **only** the trimmed tempo string (`"74"`, `"72.5"`, `"72 verse, 76 chorus"`) directly to the clipboard for instant pasting into Fender Studio Pro's tempo field.
-   - Never copies the unit "BPM", extra spaces, musical key, or newlines.
-   - Brief `"Copied"` visual confirmation indicator.
-   - Disabled when BPM is empty. Does not alter selection or clear needs-checking flags. Key copying is intentionally omitted.
-
-6. **"Needs Checking" Default Provenance Tracking:**
-   - BPM `74` and Time Signature `4/4` are convenience defaults. Setlist now tracks provenance (`default` vs `reviewed`) at the field level.
-   - Untouched or prefilled convenience values display a calm `"Needs checking"` badge in list rows and beside the readout cards.
-   - Accessible `"Mark checked"` and `"Mark both checked"` actions allow operators to confirm values with one click.
-   - Manually entering or selecting values in the song form automatically marks them reviewed.
-   - "Save & Add Another" resets touched tracking so subsequent songs are properly flagged.
-   - Existing/legacy songs are never retroactively flagged with false-positive warnings.
-   - Song duplication inherits flags without verifying.
-
-7. **Cleaned Up About Dialog:**
-   - Fixed native macOS About dialog duplicate copyright display by removing redundant credits field.
-   - Displays exact single copyright credit: `© 2026 William Hay`, version 1.2.0.
-   - Removed marketing/promotional text from Settings and About dialogs.
-
-8. **Future MIDI & Plugin Investigation Note:**
-   - Included repository documentation note ([FUTURE_MIDI.md](file:///Users/wihay/Dev/studio-songs/FUTURE_MIDI.md)) outlining future MIDI/controller integration constraints, hardware details (Korg nanoKONTROL2, Behringer X-Touch), and non-invasive MIDI bridge principles.
+The repository currently contains copyright notices credited to William Hay (`© 2026 William Hay`). A formal open-source license (such as MIT) or proprietary/all-rights-reserved license decision can be selected by the project owner upon repository publishing.

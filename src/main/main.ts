@@ -432,8 +432,8 @@ app.whenReady().then(async () => {
   // Set native macOS About Panel configuration
   app.setAboutPanelOptions({
     applicationName: 'Setlist',
-    applicationVersion: '1.2.0',
-    version: '1.2.0',
+    applicationVersion: '1.3.0',
+    version: '1.3.0',
     copyright: '© 2026 William Hay',
   });
 

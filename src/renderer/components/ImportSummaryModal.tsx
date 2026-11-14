@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { ImportResult } from '../../shared/types';
 import { CloseIcon, CheckIcon } from './Icons';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 interface ImportSummaryModalProps {
   result: ImportResult;
@@ -8,15 +9,30 @@ interface ImportSummaryModalProps {
 }
 
 export const ImportSummaryModal: React.FC<ImportSummaryModalProps> = ({ result, onClose }) => {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, true);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
+        ref={dialogRef}
         className="modal-dialog"
         style={{ maxWidth: '480px' }}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-labelledby="import-summary-title"
+        tabIndex={-1}
       >
         <div className="modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useStore } from '../hooks/useStore';
 import { TextSize, ThemePreference, ImportResult } from '../../shared/types';
 import { ImportSummaryModal } from './ImportSummaryModal';
 import { AboutModal } from './AboutModal';
 import { CloseIcon, SettingsIcon, TrashIcon } from './Icons';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -11,6 +12,8 @@ interface SettingsModalProps {
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, initialTab = 'appearance' }) => {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, true);
   const {
     state,
     updatePreferences,
@@ -95,12 +98,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, initialTa
     <>
       <div className="modal-overlay" onClick={onClose}>
         <div
+          ref={dialogRef}
           className="modal-dialog"
           style={{ maxWidth: '520px' }}
           onClick={(e) => e.stopPropagation()}
           role="dialog"
           aria-modal="true"
           aria-labelledby="settings-dialog-title"
+          tabIndex={-1}
         >
           <div className="modal-header">
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -309,7 +314,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, initialTa
                   <div>
                     <h4 style={{ fontSize: '13px', fontWeight: 600 }}>About Setlist</h4>
                     <div style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
-                      Version 1.2.0 • © 2026 William Hay
+                      Version 1.3.0 • © 2026 William Hay
                     </div>
                   </div>
                   <button className="btn" onClick={() => setIsAboutOpen(true)}>

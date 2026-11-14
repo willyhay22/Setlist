@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useStore } from '../hooks/useStore';
 import { searchSongs } from '../../shared/search';
 import { formatDisplayTitle, formatDisplayArtist } from '../../shared/formatters';
 import { formatSongRowMeta } from '../../shared/keys';
 import { songNeedsChecking, getNeedsCheckingExplanation } from '../../shared/types';
 import { SearchIcon, CloseIcon, CheckIcon } from './Icons';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 interface SongPickerModalProps {
   onClose: () => void;
@@ -14,6 +15,20 @@ export const SongPickerModal: React.FC<SongPickerModalProps> = ({ onClose }) => 
   const { state, addMultipleSongsToCurrentSetlist } = useStore();
   const [search, setSearch] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, true);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   const activeSongs = (state?.songs || []).filter(s => s.deletedAt === null);
   const results = searchSongs(activeSongs, search);
@@ -35,12 +50,14 @@ export const SongPickerModal: React.FC<SongPickerModalProps> = ({ onClose }) => 
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
+        ref={dialogRef}
         className="modal-dialog"
         style={{ maxWidth: '560px' }}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-labelledby="song-picker-title"
+        tabIndex={-1}
       >
         <div className="modal-header">
           <h3 id="song-picker-title">Add Songs to Setlist</h3>
@@ -58,8 +75,8 @@ export const SongPickerModal: React.FC<SongPickerModalProps> = ({ onClose }) => 
               style={{ paddingLeft: '32px' }}
               placeholder="Search library songs by title or artist…"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
               autoFocus
+              onChange={(e) => setSearch(e.target.value)}
             />
           </div>
         </div>

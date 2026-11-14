@@ -67,6 +67,7 @@ export const SetlistView: React.FC = () => {
 
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [draggedEntryId, setDraggedEntryId] = useState<string | null>(null);
+  const [justMovedId, setJustMovedId] = useState<string | null>(null);
 
   const currentSetlist = state?.currentSetlist || [];
   const entries = [...currentSetlist].sort((a, b) => a.position - b.position);
@@ -122,6 +123,9 @@ export const SetlistView: React.FC = () => {
     const newOrder = [...entries];
     const [moved] = newOrder.splice(index, 1);
     newOrder.splice(targetIndex, 0, moved);
+
+    setJustMovedId(moved.id);
+    setTimeout(() => setJustMovedId(null), 300);
 
     reorderCurrentSetlist(newOrder.map(e => e.id));
   };
@@ -248,7 +252,7 @@ export const SetlistView: React.FC = () => {
               return (
                 <div
                   key={entry.id}
-                  className={`setlist-entry-row ${isSelected ? 'selected' : ''}`}
+                  className={`setlist-entry-row ${isSelected ? 'selected' : ''} ${draggedEntryId === entry.id ? 'dragging' : ''} ${justMovedId === entry.id ? 'just-moved' : ''}`}
                   onClick={() => setSelectedSetlistEntryId(entry.id)}
                   draggable
                   onDragStart={(e) => handleDragStart(e, entry.id)}

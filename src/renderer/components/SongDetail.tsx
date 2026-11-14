@@ -268,6 +268,7 @@ export const SongDetail: React.FC<SongDetailProps> = ({ song }) => {
             }}
             onClick={handleAddToSetlist}
             title="Add this song to your current setlist"
+            aria-label="Add this song to your current setlist"
           >
             {justAddedToSetlist ? <CheckIcon size={13} /> : <PlusIcon size={13} />}
             <span>{justAddedToSetlist ? 'Added to Setlist' : 'Add to Setlist'}</span>
@@ -277,6 +278,7 @@ export const SongDetail: React.FC<SongDetailProps> = ({ song }) => {
             className="btn"
             onClick={() => openSongModal('edit', song)}
             title="Edit song title, artist, key, tempo, and signature"
+            aria-label="Edit song details"
           >
             <EditIcon size={13} />
             <span>Edit Details</span>
@@ -288,6 +290,7 @@ export const SongDetail: React.FC<SongDetailProps> = ({ song }) => {
               className="btn"
               onClick={() => setIsMoreMenuOpen(!isMoreMenuOpen)}
               title="More actions"
+              aria-label="More actions"
               aria-expanded={isMoreMenuOpen}
             >
               <span>More ▾</span>

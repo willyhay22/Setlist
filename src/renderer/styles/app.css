@@ -42,6 +42,14 @@
   --text-size-row-meta: 14.5px;
   --text-size-notes: 17.5px;
   --line-height-notes: 1.6;
+
+  /* Subtle Studio Motion Variables */
+  --motion-duration-micro: 90ms;   /* Hover, pressed, selection feedback: 80–120ms */
+  --motion-duration-fast: 130ms;    /* Page & content transitions: 100–160ms */
+  --motion-duration-base: 170ms;    /* Settings, dialogs, popovers, menus: 140–200ms */
+  --motion-ease-default: cubic-bezier(0.16, 1, 0.3, 1);
+  --motion-ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --motion-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Dark Mode */
@@ -125,6 +133,22 @@ body[data-text-size="x-large"] {
   --line-height-notes: 1.7;
 }
 
+/* Reduced Motion Preferences */
+@media (prefers-reduced-motion: reduce) {
+  :root,
+  body {
+    --motion-duration-micro: 0ms !important;
+    --motion-duration-fast: 0ms !important;
+    --motion-duration-base: 0ms !important;
+  }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -158,6 +182,22 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   height: 100vh;
   width: 100vw;
   overflow: hidden;
+}
+
+/* Restrained view transitions */
+@keyframes viewFadeIn {
+  from {
+    opacity: 0.88;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.home-view,
+.library-view,
+.setlist-view {
+  animation: viewFadeIn var(--motion-duration-fast) var(--motion-ease-out);
 }
 
 /* Top Header */
@@ -280,13 +320,20 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   background: var(--bg-secondary);
   color: var(--text-primary);
   cursor: pointer;
-  transition: all 0.12s ease;
+  transition: background-color var(--motion-duration-micro) var(--motion-ease-default),
+              border-color var(--motion-duration-micro) var(--motion-ease-default),
+              color var(--motion-duration-micro) var(--motion-ease-default),
+              transform var(--motion-duration-micro) var(--motion-ease-default);
   white-space: nowrap;
 }
 
 .btn:hover:not(:disabled) {
   background: var(--bg-hover);
   border-color: var(--border-strong);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
 }
 
 .btn:disabled {
@@ -382,7 +429,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   padding: 9px 14px;
   border-bottom: 1px solid var(--border-subtle);
   cursor: pointer;
-  transition: background 0.1s ease;
+  transition: background-color var(--motion-duration-micro) var(--motion-ease-default);
   position: relative;
 }
 
@@ -393,6 +440,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .song-row.selected {
   background: var(--bg-selected);
   border-left: 3px solid var(--accent-color);
+  padding-left: 11px;
+}
+
+.song-row:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: -2px;
 }
 
 .song-row-title {
@@ -477,14 +530,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   word-break: normal;
 }
 
-.song-artist-display {
-  font-size: 13.5px;
-  color: var(--text-muted);
-  margin-top: 3px;
-  overflow-wrap: break-word;
-  word-break: normal;
-}
-
 .song-header-actions-row {
   display: flex;
   align-items: center;
@@ -492,7 +537,18 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   flex-wrap: wrap;
 }
 
-/* Dropdown Menu */
+/* Dropdown Menu & Popovers */
+@keyframes popoverEnter {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .dropdown-menu {
   position: absolute;
   top: calc(100% + 4px);
@@ -504,6 +560,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   box-shadow: var(--shadow-md);
   padding: 4px;
   z-index: 50;
+  animation: popoverEnter var(--motion-duration-fast) var(--motion-ease-out);
 }
 
 .dropdown-item {
@@ -610,6 +667,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .btn-copy-bpm {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  min-width: 84px;
   gap: 4px;
   padding: 2px 7px;
   border-radius: 4px;
@@ -619,7 +678,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   font-size: 11px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color var(--motion-duration-micro) var(--motion-ease-default),
+              border-color var(--motion-duration-micro) var(--motion-ease-default),
+              color var(--motion-duration-micro) var(--motion-ease-default);
 }
 
 .btn-copy-bpm:hover:not(:disabled) {
@@ -799,6 +860,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   font-size: 12px;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  min-width: 65px;
   gap: 4px;
 }
 
@@ -935,7 +998,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   background: var(--bg-secondary);
   cursor: pointer;
   gap: 10px;
-  transition: background 0.1s ease;
+  position: relative;
+  transition: background-color var(--motion-duration-micro) var(--motion-ease-default),
+              transform var(--motion-duration-fast) var(--motion-ease-default);
 }
 
 .setlist-entry-row:hover {
@@ -945,6 +1010,21 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .setlist-entry-row.selected {
   background: var(--bg-selected);
   border-left: 3px solid var(--accent-color);
+  padding-left: 11px;
+}
+
+.setlist-entry-row.dragging {
+  opacity: 0.55;
+  background: var(--bg-tertiary);
+}
+
+.setlist-entry-row.just-moved {
+  background: var(--bg-hover);
+}
+
+.setlist-entry-row:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: -2px;
 }
 
 .setlist-drag-handle {
@@ -970,6 +1050,22 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 
 /* Modals */
+@keyframes modalOverlayFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modalDialogEnter {
+  from {
+    opacity: 0;
+    transform: scale(0.985) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -979,6 +1075,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   justify-content: center;
   z-index: 100;
   backdrop-filter: blur(2px);
+  animation: modalOverlayFadeIn var(--motion-duration-base) var(--motion-ease-out);
 }
 
 .modal-dialog {
@@ -992,6 +1089,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   flex-direction: column;
   box-shadow: var(--shadow-lg);
   overflow: hidden;
+  animation: modalDialogEnter var(--motion-duration-base) var(--motion-ease-out);
 }
 
 .modal-header {
@@ -1072,6 +1170,17 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 
 /* Toast Undo banner */
+@keyframes toastSlideUp {
+  from {
+    transform: translate(-50%, 10px);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, 0);
+    opacity: 1;
+  }
+}
+
 .toast-undo-container {
   position: fixed;
   bottom: 20px;
@@ -1087,18 +1196,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   align-items: center;
   gap: 14px;
   z-index: 90;
-  animation: slideUp 0.2s ease;
-}
-
-@keyframes slideUp {
-  from {
-    transform: translate(-50%, 20px);
-    opacity: 0;
-  }
-  to {
-    transform: translate(-50%, 0);
-    opacity: 1;
-  }
+  animation: toastSlideUp var(--motion-duration-base) var(--motion-ease-out);
 }
 
 /* Search Detour Banner */
@@ -1190,6 +1288,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   z-index: 100;
   overflow-y: auto;
   padding: 4px;
+  animation: popoverEnter var(--motion-duration-fast) var(--motion-ease-out);
 }
 
 .search-popover-item {
@@ -1201,7 +1300,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   cursor: pointer;
   background: transparent;
   gap: 10px;
-  transition: background 0.1s ease;
+  transition: background-color var(--motion-duration-micro) var(--motion-ease-default);
 }
 
 .search-popover-item:hover, .search-popover-item.focused {

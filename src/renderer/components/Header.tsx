@@ -21,6 +21,9 @@ export const Header: React.FC = () => {
     returnFromDetour,
     selectedSetlistEntryId,
     setSearchDetourEntryId,
+    songModal,
+    isSettingsOpen,
+    isRecentlyDeletedOpen,
   } = useStore();
 
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
@@ -54,6 +57,18 @@ export const Header: React.FC = () => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
       const isCmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
+      const hasOpenModal = Boolean(songModal?.isOpen || isSettingsOpen || isRecentlyDeletedOpen);
+
+      if (e.key === 'Escape' && isPopoverOpen) {
+        e.preventDefault();
+        setIsPopoverOpen(false);
+        searchInputRef.current?.blur();
+        return;
+      }
+
+      if (hasOpenModal) {
+        return;
+      }
 
       if (isCmdOrCtrl && e.key.toLowerCase() === 'f') {
         e.preventDefault();
@@ -74,7 +89,7 @@ export const Header: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [openSongModal, activeTab, searchQuery]);
+  }, [openSongModal, activeTab, searchQuery, songModal, isSettingsOpen, isRecentlyDeletedOpen, isPopoverOpen]);
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const q = e.target.value;

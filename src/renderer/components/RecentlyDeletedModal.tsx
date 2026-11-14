@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { useStore } from '../hooks/useStore';
 import { THIRTY_DAYS_MS } from '../../shared/types';
 import { CloseIcon, UndoIcon, TrashIcon } from './Icons';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 interface RecentlyDeletedModalProps {
   onClose: () => void;
@@ -9,6 +10,19 @@ interface RecentlyDeletedModalProps {
 
 export const RecentlyDeletedModal: React.FC<RecentlyDeletedModalProps> = ({ onClose }) => {
   const { state, restoreSong } = useStore();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, true);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   const deletedSongs = (state?.songs || []).filter(s => s.deletedAt !== null);
 
@@ -25,12 +39,14 @@ export const RecentlyDeletedModal: React.FC<RecentlyDeletedModalProps> = ({ onCl
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
+        ref={dialogRef}
         className="modal-dialog"
         style={{ maxWidth: '580px' }}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-labelledby="deleted-songs-title"
+        tabIndex={-1}
       >
         <div className="modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

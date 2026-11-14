@@ -1,7 +1,7 @@
 # Future MIDI & DAW Integration Investigation Note
 
 > [!NOTE]
-> This document records confirmed hardware facts, research constraints, and a potential testing strategy for a future release. **No MIDI features, virtual ports, background listeners, or controller scripts are enabled or implemented in Setlist v1.2.** Setlist remains a 100% offline visual reference and running-order tool.
+> This document records confirmed hardware facts, research constraints, and a potential testing strategy for a future release. **No MIDI features, virtual ports, background listeners, or controller scripts are enabled or implemented in Setlist v1.3.** Setlist remains a 100% offline visual reference and running-order tool.
 
 ---
 
@@ -23,7 +23,7 @@
 - **Fender Control Link:** Fender Studio Pro provides Control Link to map external hardware controls to host commands or plugin parameters.
 - **Waves Tune Real-Time Automation:** Waves documents Root and Scale as host-automatable parameters, which behave differently than incoming MIDI performance messages.
 - **Target Pitch vs. Key/Scale Selection:** Sending raw MIDI Notes into Waves Tune Real-Time's *Target Pitch* function forces the vocal output to specific chromatic notes; this is distinct from setting the global song Key/Scale root.
-- **Multi-Instance Linking:** While newer revisions of Waves Tune Real-Time mention a *Send Scale to All* feature, the exact installed version and multi-track routing in the church's session must be physically confirmed before relying on global broadcast.
+- **Multi-Instance Linking:** While newer revisions of Waves Tune Real-Time mention a *Send Scale to All* feature, the exact installed version and multi-track routing in the studio's session must be physically confirmed before relying on global broadcast.
 
 ---
 
